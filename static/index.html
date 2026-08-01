@@ -72,6 +72,14 @@
   #run:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 rgba(28,25,23,.9); }
   #run:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(28,25,23,.9); }
   #run:disabled { opacity: .45; cursor: wait; }
+  #download-report {
+    font-family: var(--sans); font-weight: 600; font-size: 12px;
+    letter-spacing: .05em; text-transform: uppercase;
+    padding: 8px 14px; border: 2px solid var(--ink); border-radius: 0;
+    background: var(--card); color: var(--ink); cursor: pointer;
+  }
+  #download-report:hover:not(:disabled) { background: var(--ink); color: var(--card); }
+  #download-report:disabled { opacity: .35; cursor: not-allowed; }
   .stats {
     margin-left: auto; display: flex; align-items: baseline; gap: 18px;
     font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
@@ -118,6 +126,42 @@
     color: var(--ink); background: transparent; outline: none;
   }
   .doc textarea:focus { background: #fffef2; }
+  #upload-btn {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 10px; border: 1px solid var(--ink); background: var(--card);
+    color: var(--ink); cursor: pointer;
+  }
+  #upload-btn:hover { background: var(--ink); color: var(--card); }
+  #upload-btn:disabled { opacity: .5; cursor: wait; }
+  .source-toggle { display: flex; gap: 0; margin-bottom: 12px; }
+  .source-toggle button {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em;
+    padding: 5px 12px; border: 1px solid var(--ink); background: var(--card);
+    color: var(--ink-soft); cursor: pointer;
+  }
+  .source-toggle button + button { border-left: 0; }
+  .source-toggle button.active { background: var(--ink); color: var(--card); font-weight: 600; }
+  .prov-chip {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em;
+    color: var(--ink-soft); background: var(--paper);
+    border: 1px solid var(--hairline); padding: 1px 6px; margin-left: 8px;
+    white-space: nowrap;
+  }
+  .doc-note {
+    font-family: var(--serif); font-style: italic; font-size: 11.5px;
+    color: var(--ink-faint); padding: 4px 12px 0;
+  }
+  .banner {
+    display: flex; align-items: baseline; gap: 10px;
+    background: var(--red-soft); border: 1px solid var(--red);
+    color: var(--ink); font-size: 12.5px; line-height: 1.5;
+    padding: 9px 12px; margin-bottom: 12px;
+  }
+  .banner button {
+    margin-left: auto; border: 0; background: none; cursor: pointer;
+    font-family: var(--mono); font-size: 12px; color: var(--red);
+  }
 
   /* ---------- findings (middle) ---------- */
   .finding {
@@ -197,6 +241,7 @@
   <div class="wordmark">RED<span class="red">/</span>LINE<span class="tag">every claim checked against the source</span></div>
   <select id="rulebook" title="Rulebook"></select>
   <button id="run">Run audit</button>
+  <button id="download-report" disabled title="Run an audit first">Download report</button>
   <div class="stats">
     <span id="counter"><b>—</b> rules</span>
     <span class="p"><b id="n-pass">0</b> pass</span>
@@ -208,7 +253,15 @@
 
 <main>
   <section class="pane" id="chart-pane">
-    <div class="pane-label">Documents — edit anything</div>
+    <div class="pane-label">Documents — edit anything
+      <button id="upload-btn" type="button">Upload PDF</button>
+      <input type="file" id="pdf-input" accept="application/pdf" hidden>
+    </div>
+    <div id="banner-slot"></div>
+    <div id="source-toggle" class="source-toggle" hidden>
+      <button type="button" data-source="corpus" class="active">Committed corpus</button>
+      <button type="button" data-source="upload"></button>
+    </div>
     <div id="docs"></div>
   </section>
   <section class="pane">
@@ -227,8 +280,14 @@ const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&g
 
 let rulebooks = [];
 let lastRunDocs = {};   // doc_id -> {text, doc_type, date} snapshot at run time
+let lastRun = null;     // {rulebook_id, documents, findings, counts, elapsed_s}
 let selectedEl = null;
 let timerHandle = null;
+let corpusDocs = [];
+let uploadedDocs = null;
+let uploadedNotes = {};
+let uploadedFilename = '';
+let currentSource = 'corpus';   // 'corpus' | 'upload'
 
 async function init() {
   rulebooks = await (await fetch('/rulebooks')).json();
@@ -240,22 +299,28 @@ async function init() {
 }
 
 async function loadCorpus(rulebookId) {
-  const docs = await (await fetch(`/corpus/${rulebookId}`)).json();
-  $('docs').innerHTML = docs.map(d => `
-    <div class="doc" data-doc-id="${esc(d.doc_id)}" data-doc-type="${esc(d.doc_type)}">
-      <div class="doc-head">
-        <span class="doc-title">${esc(d.doc_type)}</span>
-        <input type="date" value="${esc(d.date)}">
-      </div>
-      <textarea spellcheck="false">${esc(d.text)}</textarea>
-    </div>`).join('');
-  // size textareas to content (capped)
-  for (const ta of document.querySelectorAll('.doc textarea')) {
-    ta.style.height = Math.min(ta.scrollHeight + 4, 340) + 'px';
-  }
+  corpusDocs = await (await fetch(`/corpus/${rulebookId}`)).json();
+  if (currentSource === 'corpus') renderDocs(corpusDocs);
   resetResults();
   const rb = rulebooks.find(r => r.rulebook_id === rulebookId);
   $('counter').innerHTML = `<b>${rb.rule_count}</b> rules`;
+}
+
+function renderDocs(docs, fromUpload = false) {
+  $('docs').innerHTML = docs.map(d => `
+    <div class="doc" data-doc-id="${esc(d.doc_id)}" data-doc-type="${esc(d.doc_type)}">
+      <div class="doc-head">
+        <span class="doc-title">${esc(d.doc_type)}${fromUpload ?
+          `<span class="prov-chip">from PDF: ${esc(uploadedFilename)}</span>` : ''}</span>
+        <input type="date" value="${esc(d.date)}">
+      </div>
+      ${fromUpload && uploadedNotes[d.doc_id] ?
+        `<div class="doc-note">${esc(uploadedNotes[d.doc_id])}</div>` : ''}
+      <textarea spellcheck="false">${esc(d.text)}</textarea>
+    </div>`).join('');
+  for (const ta of document.querySelectorAll('.doc textarea')) {
+    ta.style.height = Math.min(ta.scrollHeight + 4, 340) + 'px';
+  }
 }
 
 function collectDocs() {
@@ -267,12 +332,75 @@ function collectDocs() {
   }));
 }
 
+function showBanner(message) {
+  $('banner-slot').innerHTML =
+    `<div class="banner"><span>${esc(message)}</span><button type="button">dismiss ✕</button></div>`;
+  $('banner-slot').querySelector('button').onclick = () => $('banner-slot').innerHTML = '';
+}
+
+function switchSource(source) {
+  if (source === currentSource) return;
+  // Persist in-pane edits back into the cache we're leaving.
+  if (currentSource === 'corpus') corpusDocs = collectDocs();
+  else uploadedDocs = collectDocs();
+  currentSource = source;
+  for (const b of $('source-toggle').querySelectorAll('button')) {
+    b.classList.toggle('active', b.dataset.source === source);
+  }
+  renderDocs(source === 'upload' ? uploadedDocs : corpusDocs, source === 'upload');
+  resetResults();
+}
+
+async function handleUpload(file) {
+  const btn = $('upload-btn');
+  btn.disabled = true;
+  btn.textContent = 'Extracting…';
+  $('banner-slot').innerHTML = '';
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/intake/pdf', {method: 'POST', body: form});
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || `upload failed: HTTP ${res.status}`);
+    uploadedDocs = body.documents;
+    uploadedFilename = body.filename || file.name;
+    uploadedNotes = Object.fromEntries((body.notes || []).map(n => [n.doc_id, n.note]));
+    const toggle = $('source-toggle');
+    toggle.hidden = false;
+    toggle.querySelector('[data-source=upload]').textContent = `From upload: ${uploadedFilename}`;
+    if (currentSource === 'corpus') corpusDocs = collectDocs();
+    currentSource = 'upload';
+    for (const b of toggle.querySelectorAll('button')) {
+      b.classList.toggle('active', b.dataset.source === 'upload');
+    }
+    renderDocs(uploadedDocs, true);
+    resetResults();
+  } catch (err) {
+    showBanner(String(err.message || err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Upload PDF';
+    $('pdf-input').value = '';
+  }
+}
+
+$('upload-btn').onclick = () => $('pdf-input').click();
+$('pdf-input').onchange = () => {
+  if ($('pdf-input').files[0]) handleUpload($('pdf-input').files[0]);
+};
+$('source-toggle').onclick = (e) => {
+  const b = e.target.closest('button[data-source]');
+  if (b) switchSource(b.dataset.source);
+};
+
 function resetResults() {
   $('findings').innerHTML = '<div class="empty">Run the audit to stream findings here.</div>';
   $('detail').innerHTML = '<div class="empty">Select a finding to see the regulation, the rationale, and the verified source span.</div>';
   for (const k of ['pass','fail','unclear']) $('n-' + k).textContent = '0';
   $('elapsed').textContent = '0.0s';
   selectedEl = null;
+  lastRun = null;
+  $('download-report').disabled = true;
 }
 
 async function runAudit() {
@@ -283,6 +411,8 @@ async function runAudit() {
   const documents = collectDocs();
   lastRunDocs = Object.fromEntries(documents.map(d => [d.doc_id, d]));
   const counts = {pass: 0, fail: 0, unclear: 0};
+  const runFindings = [];
+  const runRulebook = $('rulebook').value;
 
   const t0 = performance.now();
   timerHandle = setInterval(() =>
@@ -312,10 +442,19 @@ async function runAudit() {
           const f = JSON.parse(data);
           counts[f.verdict]++;
           $('n-' + f.verdict).textContent = counts[f.verdict];
+          runFindings.push(f);
           appendFinding(f);
         } else if (event === 'done') {
           const d = JSON.parse(data);
           $('elapsed').textContent = d.elapsed_s + 's';
+          lastRun = {
+            rulebook_id: runRulebook,
+            documents,
+            findings: runFindings,
+            counts: d.counts,
+            elapsed_s: d.elapsed_s,
+          };
+          $('download-report').disabled = false;
         }
       }
     }
@@ -381,7 +520,34 @@ function renderDetail(f) {
   if (mark) excerpt.scrollTop = Math.max(0, mark.offsetTop - excerpt.clientHeight / 2);
 }
 
+async function downloadReport() {
+  if (!lastRun) return;
+  const btn = $('download-report');
+  btn.disabled = true;
+  btn.textContent = 'Drafting…';
+  try {
+    const res = await fetch('/packet', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(lastRun),
+    });
+    if (!res.ok) throw new Error(`packet failed: HTTP ${res.status}`);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'corrective_action_report.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    showBanner(String(err.message || err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Download report';
+  }
+}
+
 $('run').onclick = runAudit;
+$('download-report').onclick = downloadReport;
 init();
 </script>
 </body>

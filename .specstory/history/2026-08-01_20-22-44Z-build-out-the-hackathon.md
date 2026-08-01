@@ -21550,3 +21550,2115 @@ Live verification is complete — everything in the plan passed. The app is runn
 - **Browser test** — drove the UI headlessly: no console errors, findings stream in with the counter and timer, pass/fail citation panes render correctly. I fixed one bug found this way (highlight auto-scroll was dragging the whole citation pane and clipping the verdict line — now only the excerpt box scrolls).
 
 Two things worth knowing before demo day: the model is `claude-opus-5` at `effort=low` (both tunable in `.env` — if you want to shave latency further, that's the knob), and nothing is committed to git yet — say the word if you want a commit. For rehearsal, per your original plan: practice steering judges toward high-contrast edits ("delete the consent line" or "add a strengths section"), and keep a recorded run in a second tab as wifi insurance.
+
+---
+
+_**User (2026-08-01 20:50:24Z)**_
+
+how do I start, is it npm?
+
+---
+
+_**Agent (claude-fable-5 2026-08-01 20:50:31Z)**_
+
+No npm — it's Python, managed with `uv`. One command from the repo root:
+
+```
+uv run uvicorn main:app --port 8000
+```
+
+Then open http://localhost:8000. (`uv run` auto-creates the virtualenv and installs dependencies from `pyproject.toml` on first run, so there's no separate install step.)
+
+Note: I already have a server running in the background from the verification, so the page is live right now — if you start your own, either kill mine first (`lsof -ti :8000 | xargs kill`) or just use the one that's up. The API key is read from `.env` automatically at startup.
+
+---
+
+_**User (2026-08-01 21:30:05Z)**_
+
+Take a look at the PDF_Intake_directive md, lets plan to build this out
+
+---
+
+_**Agent (claude-fable-5 2026-08-01 21:30:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find the PDF_Intake_directive file
+
+`ls -la /Users/johnzhang/Documents/GitHub/document_verification/ | grep -i -E "pdf|intake|directive"; find /Users/johnzhang/Documents/GitHub/document_verification -maxdepth 2 -iname "*pdf*" -o -maxdepth 2 -iname "*directive*" 2>/dev/null | grep -v .venv`
+
+```text
+-rw-r--r--@  1 johnzhang  staff    8568 Aug  1 14:29 PDF_INTAKE_DIRECTIVE.md
+/Users/johnzhang/Documents/GitHub/document_verification/PDF_INTAKE_DIRECTIVE.md
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:30:26Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./PDF_INTAKE_DIRECTIVE.md`
+
+```text
+1	# Redline — Final Extension: PDF Intake + Corrective-Action Packet
+2	
+3	Directive for Claude Code. This document gives intent, contracts, and constraints.
+4	Implementation specifics (libraries, parsing strategy, HTML details) are yours to
+5	decide — but every contract and DO-NOT in here is binding.
+6	
+7	## Context
+8	
+9	Redline audits a document set against a rulebook (42 CFR §482.61) and streams
+10	per-rule findings over SSE. Working today:
+11	
+12	- `POST /audit` — SSE stream of findings, `done` event with counts + elapsed time
+13	- `GET /rulebooks`, `GET /corpus/{rulebook_id}`
+14	- `engine/` — `evaluate.py` (semaphore fan-out), `llm.py` (structured output via
+15	  tool-use), `schemas.py` (`DocumentIn`, `Rulebook`, `Finding`)
+16	- Three-state section encoding, flattened for display: absent sections omitted,
+17	  empty sections rendered as `(left blank)`
+18	- Verbatim-evidence verification: a `pass` requires a quoted span that appears
+19	  exactly in the source text, or it downgrades to `unclear`
+20	
+21	We are adding two features, in priority order. If time runs short, Feature 1
+22	complete beats both features partial.
+23	
+24	1. **PDF intake** — a judge hands us an EHR chart export we have never seen;
+25	   we audit it.
+26	2. **Corrective-action packet** — a downloadable report with findings, verbatim
+27	   regulatory citations, drafted fixes, and sign-off lines.
+28	
+29	Demo framing these serve: "Charts live in an EHR. Every EHR exports. Drop the
+30	export here." The PDF path must therefore work on a *generic* chart export —
+31	not one shaped like our committed corpus.
+32	
+33	---
+34	
+35	## Feature 1 — PDF intake
+36	
+37	### New endpoint
+38	
+39	`POST /intake/pdf` — accepts a PDF upload, returns `list[DocumentIn]` plus a
+40	per-document extraction confidence note. It does NOT auto-run the audit: the
+41	user sees the extraction in the editable left pane first, then triggers
+42	`/audit` themselves. Two reasons this is load-bearing: the judge's
+43	delete-and-re-run loop operates on extracted text, and eyeballing the
+44	extraction before auditing is our defense against garbage-in.
+45	
+46	### Extraction pipeline — use the LLM, not a parsing library, for structure
+47	
+48	Getting raw text out of the PDF is mechanical (pick any standard Python text
+49	extraction; if the PDF yields no text layer, return a clear error — "this PDF
+50	appears to be scanned; OCR is out of scope" — do NOT attempt OCR).
+51	
+52	Turning raw text into our document structure is judgment, so it goes through
+53	`llm.py`'s structured-output path like everything else. One call: here is the
+54	raw text of a clinical chart export, split it into documents (intake
+55	assessment, progress notes, treatment plan, discharge summary — whatever is
+56	actually present), and for each return `doc_type`, `date` if stated, and the
+57	section headings + text as found. The model must preserve source wording
+58	EXACTLY — no cleanup, no normalization, no summarizing. Say this explicitly in
+59	the prompt and say why: downstream evidence verification does exact substring
+60	matching against this text, so any rewording breaks the audit.
+61	
+62	Map the result into `DocumentIn` via the existing flattening conventions.
+63	Sections the model reports as present-but-empty use the `(left blank)`
+64	rendering.
+65	
+66	### Contract that must not break
+67	
+68	`/audit` consumes the same `DocumentIn` list whether it came from the committed
+69	corpus or a PDF. No `source_type` branching inside the engine. If you find
+70	yourself adding an `if pdf` anywhere in `engine/`, stop — the shape is wrong.
+71	
+72	### Offsets and display
+73	
+74	All highlighting and all judge edits operate on the extracted text in the left
+75	pane. The UI may show a small "from PDF: {filename}" provenance chip per
+76	document. Do NOT attempt to render or highlight inside the PDF itself — the
+77	extracted text IS the working document.
+78	
+79	### Failure behavior
+80	
+81	Extraction failures must be survivable on stage: a structured error with a
+82	human-readable reason rendered as a dismissible banner, never a blank pane or
+83	a raw traceback. If the LLM structuring call fails or returns unparseable
+84	output, fall back to a single `DocumentIn` containing the raw extracted text
+85	with `doc_type: "Unstructured chart export"` — the audit can still run against
+86	it, which is a degraded demo but not a dead one.
+87	
+88	### UI
+89	
+90	Add an upload affordance to the left pane (button or drop zone — your call).
+91	On success, the extracted documents replace the current corpus in the editable
+92	pane, and the corpus dropdown gains a "From upload" state so the user can
+93	switch back to the committed corpus without reloading.
+94	
+95	---
+96	
+97	## Feature 2 — Corrective-action packet
+98	
+99	### New endpoint
+100	
+101	`POST /packet` — accepts the audit results (findings + the documents they ran
+102	against + rulebook id + elapsed/counts from the `done` event), returns a
+103	standalone HTML file as a download. HTML, not PDF generation — print-ready HTML
+104	is 20 minutes and zero dependencies; browser print-to-PDF covers anyone who
+105	wants a PDF. Do not add a PDF generation library.
+106	
+107	### Contents, in order
+108	
+109	1. **Header** — "Corrective Action Report", rulebook name, source citation
+110	   (42 CFR § 482.61 + eCFR URL), audit date, elapsed seconds and counts pulled
+111	   from the `done` event (the audit's own numbers, not hardcoded).
+112	2. **Summary table** — one row per rule: rule id, verdict chip, one-line
+113	   status.
+114	3. **Findings detail** — for every `fail` and `unclear`: the VERBATIM
+115	   regulatory requirement text, the rationale, and the evidence status (what
+116	   was searched, what was or wasn't found).
+117	4. **Drafted corrective documentation** — for each fail, the auto-fix draft if
+118	   one was generated this session. Every draft carries the label "DRAFT — for
+119	   clinician review and signature. Not part of the medical record until
+120	   reviewed, edited as needed, and signed." If the auto-fix feature didn't make
+121	   it in, this section instead lists what documentation must be added, per
+122	   finding, and the label requirement moves to that list's header.
+123	5. **Sign-off block** — reviewer name / credential / date / signature lines.
+124	   This is what makes it the artifact a compliance officer hands a program
+125	   director rather than a printout of our UI.
+126	
+127	### Frontend
+128	
+129	"Download report" button, enabled when an audit has completed. Style the packet
+130	like a document (print CSS, page margins, no app chrome) — it should look
+131	right printed, because that is how it would actually be used.
+132	
+133	---
+134	
+135	## Sample data to create
+136	
+137	One new fixture: `corpus/sample_export.pdf` — a realistic multi-page chart
+138	export in a DIFFERENT visual layout than our committed corpus. Different
+139	section heading names ("Presenting Problem" instead of "History of Present
+140	Illness"), a header/footer with a fake clinic name and page numbers, the same
+141	underlying clinical content shape: intake + 3 progress notes + treatment plan.
+142	Plant the same four gaps as chart_clean.json so the audit outcome is known.
+143	
+144	Generate it by writing an HTML file and converting to PDF however is most
+145	convenient. The point of the different layout is honesty: the demo claim is
+146	"a chart shaped like someone else's EHR export," so the fixture must not be
+147	our own corpus wearing a PDF extension.
+148	
+149	Also produce `corpus/sample_export_broken.pdf` — same document minus the
+150	consent line, for a staged judge variant if the live-mangle flow isn't wanted.
+151	
+152	## Do not build
+153	
+154	- OCR / scanned-PDF handling (detect and error clearly instead)
+155	- PDF rendering or in-PDF highlighting
+156	- PDF *generation* libraries for the packet (HTML only)
+157	- Any `source_type` branching in `engine/`
+158	- SimplePractice or any EHR API integration
+159	- Persistence of uploads beyond the session
+160	
+161	## Order of work and timeboxes
+162	
+163	1. `/intake/pdf` extraction + LLM structuring + UI upload — 35 min
+164	2. `sample_export.pdf` fixture + end-to-end test that its audit flags the four
+165	   planted gaps — 10 min
+166	3. `/packet` + download button — 20 min
+167	4. Broken-variant PDF — 5 min
+168	
+169	If step 1 is not producing a correct audit against the fixture by its timebox,
+170	cut Feature 2 to the fallback (packet without drafts) and spend the difference
+171	on making extraction robust. A working PDF intake with a plain packet beats a
+172	beautiful packet behind a flaky intake.
+173	
+174	## Definition of done
+175	
+176	Upload `sample_export.pdf` → extracted documents appear editable in the left
+177	pane → run audit → the four planted gaps flag correctly with verified evidence
+178	spans on the passes → delete a line in the extracted text, re-run, watch the
+179	corresponding rule flip → download the packet → it opens standalone, contains
+180	the verbatim 482.61 text for each failure, and prints cleanly.
+181	
+182	That sequence, run twice without intervention, is the rehearsal bar.
+183
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:31:22Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Confirm scope_docs fallback and computed-rule doc_type matching
+
+`grep -n "scoped" /Users/johnzhang/Documents/GitHub/document_verification/engine/evaluate.py | head -3; grep -n "progress note" /Users/johnzhang/Documents/GitHub/document_verification/engine/computed.py`
+
+```text
+78:    scoped = [d for d in documents if d.doc_id in rule.scope_docs] or documents
+85:            return handler(rule, scoped).model_copy(update=meta)
+89:            user_prompt=build_user_prompt(rule, scoped),
+26:    between progress notes (and admission -> first note) within the first two
+43:            if "progress note" in doc.doc_type.lower() and _parse_date(doc.date)
+52:            rationale="No dated progress notes found in the chart, so the weekly "
+60:    checkpoints += [(d, f"progress note dated {d.isoformat()}") for d, _ in notes]
+77:                f"Admission {admission.isoformat()}; progress notes dated {dates_str}. "
+87:            f"Admission {admission.isoformat()}; progress notes dated {dates_str}. "
+```
+</details></tool-use>
+
+---
+
+_**User (2026-08-01 21:31:36Z)**_
+
+[Request interrupted by user]
+
+_**User (2026-08-01 21:33:58Z)**_
+
+Take a look at the PDF_Intake_directive md, lets plan to build this out
+
+---
+
+_**Agent (claude-fable-5 2026-08-01 21:34:17Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find the PDF intake directive file
+
+`ls -la /Users/johnzhang/Documents/GitHub/document_verification/ | grep -i -E "pdf|intake|directive"; find /Users/johnzhang/Documents/GitHub/document_verification -iname "*pdf*" -not -path "*/.venv/*" -not -path "*/.git/*" 2>/dev/null`
+
+```text
+-rw-r--r--@  1 johnzhang  staff    8568 Aug  1 14:29 PDF_INTAKE_DIRECTIVE.md
+/Users/johnzhang/Documents/GitHub/document_verification/PDF_INTAKE_DIRECTIVE.md
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:34:23Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./PDF_INTAKE_DIRECTIVE.md`
+
+```text
+Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead.
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:34:27Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read the PDF intake directive
+
+`cat /Users/johnzhang/Documents/GitHub/document_verification/PDF_INTAKE_DIRECTIVE.md`
+
+```text
+# Redline — Final Extension: PDF Intake + Corrective-Action Packet
+
+Directive for Claude Code. This document gives intent, contracts, and constraints.
+Implementation specifics (libraries, parsing strategy, HTML details) are yours to
+decide — but every contract and DO-NOT in here is binding.
+
+## Context
+
+Redline audits a document set against a rulebook (42 CFR §482.61) and streams
+per-rule findings over SSE. Working today:
+
+- `POST /audit` — SSE stream of findings, `done` event with counts + elapsed time
+- `GET /rulebooks`, `GET /corpus/{rulebook_id}`
+- `engine/` — `evaluate.py` (semaphore fan-out), `llm.py` (structured output via
+  tool-use), `schemas.py` (`DocumentIn`, `Rulebook`, `Finding`)
+- Three-state section encoding, flattened for display: absent sections omitted,
+  empty sections rendered as `(left blank)`
+- Verbatim-evidence verification: a `pass` requires a quoted span that appears
+  exactly in the source text, or it downgrades to `unclear`
+
+We are adding two features, in priority order. If time runs short, Feature 1
+complete beats both features partial.
+
+1. **PDF intake** — a judge hands us an EHR chart export we have never seen;
+   we audit it.
+2. **Corrective-action packet** — a downloadable report with findings, verbatim
+   regulatory citations, drafted fixes, and sign-off lines.
+
+Demo framing these serve: "Charts live in an EHR. Every EHR exports. Drop the
+export here." The PDF path must therefore work on a *generic* chart export —
+not one shaped like our committed corpus.
+
+---
+
+## Feature 1 — PDF intake
+
+### New endpoint
+
+`POST /intake/pdf` — accepts a PDF upload, returns `list[DocumentIn]` plus a
+per-document extraction confidence note. It does NOT auto-run the audit: the
+user sees the extraction in the editable left pane first, then triggers
+`/audit` themselves. Two reasons this is load-bearing: the judge's
+delete-and-re-run loop operates on extracted text, and eyeballing the
+extraction before auditing is our defense against garbage-in.
+
+### Extraction pipeline — use the LLM, not a parsing library, for structure
+
+Getting raw text out of the PDF is mechanical (pick any standard Python text
+extraction; if the PDF yields no text layer, return a clear error — "this PDF
+appears to be scanned; OCR is out of scope" — do NOT attempt OCR).
+
+Turning raw text into our document structure is judgment, so it goes through
+`llm.py`'s structured-output path like everything else. One call: here is the
+raw text of a clinical chart export, split it into documents (intake
+assessment, progress notes, treatment plan, discharge summary — whatever is
+actually present), and for each return `doc_type`, `date` if stated, and the
+section headings + text as found. The model must preserve source wording
+EXACTLY — no cleanup, no normalization, no summarizing. Say this explicitly in
+the prompt and say why: downstream evidence verification does exact substring
+matching against this text, so any rewording breaks the audit.
+
+Map the result into `DocumentIn` via the existing flattening conventions.
+Sections the model reports as present-but-empty use the `(left blank)`
+rendering.
+
+### Contract that must not break
+
+`/audit` consumes the same `DocumentIn` list whether it came from the committed
+corpus or a PDF. No `source_type` branching inside the engine. If you find
+yourself adding an `if pdf` anywhere in `engine/`, stop — the shape is wrong.
+
+### Offsets and display
+
+All highlighting and all judge edits operate on the extracted text in the left
+pane. The UI may show a small "from PDF: {filename}" provenance chip per
+document. Do NOT attempt to render or highlight inside the PDF itself — the
+extracted text IS the working document.
+
+### Failure behavior
+
+Extraction failures must be survivable on stage: a structured error with a
+human-readable reason rendered as a dismissible banner, never a blank pane or
+a raw traceback. If the LLM structuring call fails or returns unparseable
+output, fall back to a single `DocumentIn` containing the raw extracted text
+with `doc_type: "Unstructured chart export"` — the audit can still run against
+it, which is a degraded demo but not a dead one.
+
+### UI
+
+Add an upload affordance to the left pane (button or drop zone — your call).
+On success, the extracted documents replace the current corpus in the editable
+pane, and the corpus dropdown gains a "From upload" state so the user can
+switch back to the committed corpus without reloading.
+
+---
+
+## Feature 2 — Corrective-action packet
+
+### New endpoint
+
+`POST /packet` — accepts the audit results (findings + the documents they ran
+against + rulebook id + elapsed/counts from the `done` event), returns a
+standalone HTML file as a download. HTML, not PDF generation — print-ready HTML
+is 20 minutes and zero dependencies; browser print-to-PDF covers anyone who
+wants a PDF. Do not add a PDF generation library.
+
+### Contents, in order
+
+1. **Header** — "Corrective Action Report", rulebook name, source citation
+   (42 CFR § 482.61 + eCFR URL), audit date, elapsed seconds and counts pulled
+   from the `done` event (the audit's own numbers, not hardcoded).
+2. **Summary table** — one row per rule: rule id, verdict chip, one-line
+   status.
+3. **Findings detail** — for every `fail` and `unclear`: the VERBATIM
+   regulatory requirement text, the rationale, and the evidence status (what
+   was searched, what was or wasn't found).
+4. **Drafted corrective documentation** — for each fail, the auto-fix draft if
+   one was generated this session. Every draft carries the label "DRAFT — for
+   clinician review and signature. Not part of the medical record until
+   reviewed, edited as needed, and signed." If the auto-fix feature didn't make
+   it in, this section instead lists what documentation must be added, per
+   finding, and the label requirement moves to that list's header.
+5. **Sign-off block** — reviewer name / credential / date / signature lines.
+   This is what makes it the artifact a compliance officer hands a program
+   director rather than a printout of our UI.
+
+### Frontend
+
+"Download report" button, enabled when an audit has completed. Style the packet
+like a document (print CSS, page margins, no app chrome) — it should look
+right printed, because that is how it would actually be used.
+
+---
+
+## Sample data to create
+
+One new fixture: `corpus/sample_export.pdf` — a realistic multi-page chart
+export in a DIFFERENT visual layout than our committed corpus. Different
+section heading names ("Presenting Problem" instead of "History of Present
+Illness"), a header/footer with a fake clinic name and page numbers, the same
+underlying clinical content shape: intake + 3 progress notes + treatment plan.
+Plant the same four gaps as chart_clean.json so the audit outcome is known.
+
+Generate it by writing an HTML file and converting to PDF however is most
+convenient. The point of the different layout is honesty: the demo claim is
+"a chart shaped like someone else's EHR export," so the fixture must not be
+our own corpus wearing a PDF extension.
+
+Also produce `corpus/sample_export_broken.pdf` — same document minus the
+consent line, for a staged judge variant if the live-mangle flow isn't wanted.
+
+## Do not build
+
+- OCR / scanned-PDF handling (detect and error clearly instead)
+- PDF rendering or in-PDF highlighting
+- PDF *generation* libraries for the packet (HTML only)
+- Any `source_type` branching in `engine/`
+- SimplePractice or any EHR API integration
+- Persistence of uploads beyond the session
+
+## Order of work and timeboxes
+
+1. `/intake/pdf` extraction + LLM structuring + UI upload — 35 min
+2. `sample_export.pdf` fixture + end-to-end test that its audit flags the four
+   planted gaps — 10 min
+3. `/packet` + download button — 20 min
+4. Broken-variant PDF — 5 min
+
+If step 1 is not producing a correct audit against the fixture by its timebox,
+cut Feature 2 to the fallback (packet without drafts) and spend the difference
+on making extraction robust. A working PDF intake with a plain packet beats a
+beautiful packet behind a flaky intake.
+
+## Definition of done
+
+Upload `sample_export.pdf` → extracted documents appear editable in the left
+pane → run audit → the four planted gaps flag correctly with verified evidence
+spans on the passes → delete a line in the extracted text, re-run, watch the
+corresponding rule flip → download the packet → it opens standalone, contains
+the verbatim 482.61 text for each failure, and prints cleanly.
+
+That sequence, run twice without intervention, is the rehearsal bar.
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:35:36Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="AskUserQuestion"><details>
+<summary>Tool use: **AskUserQuestion**</summary>
+**The packet's "Drafted corrective documentation" section: the directive says to include auto-fix drafts "if one was generated this session," else fall back to a static list of required documentation per finding. We don't have an auto-fix feature. Should /packet generate LLM-drafted fixes for each fail at download time?**
+
+Options:
+- **LLM drafts (Recommended)** - At packet time, one structured LLM call per fail drafts the missing documentation (e.g., a strengths inventory) grounded in the actual chart content, labeled DRAFT for clinician review. Adds ~5s to download; per-draft error isolation falls back to the static list if a call fails. Stronger demo close.
+- **Static list only** - The packet lists what documentation must be added per finding, derived from each rule's evidence_required text. Zero LLM calls, zero flake risk, instant download — the directive's explicit fallback.
+
+
+**Answer:** LLM drafts (Recommended)
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:36:16Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```md
+# Redline extension — PDF intake + corrective-action packet
+
+## Context
+
+Redline (built earlier this session, live at localhost:8000) audits documents against a rulebook and streams verified findings. `PDF_INTAKE_DIRECTIVE.md` specifies the final extension: (1) **PDF intake** — a judge drops in an unseen EHR chart export, we extract it into the editable pane and audit it with the unchanged engine; (2) **corrective-action packet** — a downloadable, print-ready HTML report with findings, verbatim citations, LLM-drafted fixes (user confirmed: draft at packet time, with fallback), and sign-off lines. Priority: Feature 1 complete beats both partial. All DO-NOTs in the directive are binding: no OCR, no in-PDF rendering, no PDF-generation library, no `source_type` branching in `engine/`, no upload persistence.
+
+## Reuse (all from this session's code)
+
+- `engine/llm.py` `AnthropicLLM.structured()` — both new LLM calls (chart structuring, fix drafting) go through it; it already takes `max_tokens` per call.
+- `main.py` `_flatten()` — the extracted sections map onto the same `{sections:[{heading,text}]}` shape, so flattening + `(left blank)` conventions are reused verbatim.
+- `engine/schemas.py` `DocumentIn`, `Finding` — `/audit` contract untouched; `/packet` request reuses both.
+- Per-unit error isolation pattern from `evaluate.py` — applied to per-fail draft generation.
+
+## Feature 1 — PDF intake
+
+**Deps** (pyproject.toml): add `pypdf` (text extraction) and `python-multipart` (FastAPI uploads).
+
+**`engine/intake.py`** (new):
+- `extract_text(pdf_bytes) -> str` via pypdf, pages joined with page-break markers. If total extracted text is near-empty (< ~200 chars), raise a typed error → endpoint returns structured 422: *"This PDF appears to be scanned (no text layer). OCR is out of scope."*
+- Structuring schemas (pydantic, used as `response_model`): `ExtractedSection{heading, text}`, `ExtractedDocument{doc_type, date ("" if unstated, else YYYY-MM-DD), extraction_note, sections}`, `ExtractedChart{documents}`.
+- `structure_chart(raw_text, llm) -> ExtractedChart` — one `llm.structured()` call, `max_tokens=16000`. Prompt: split this clinical chart export into its constituent documents; **preserve source wording exactly — no cleanup, normalization, or summarizing — because downstream evidence verification does exact substring matching against this text**; represent present-but-empty sections with `text: ""`.
+- On any structuring failure: fall back to a single document `{doc_type: "Unstructured chart export", date: "", text: raw_text}` with a note — degraded but auditable.
+
+**`main.py`**:
+- `POST /intake/pdf` (multipart file) → `{filename, documents: [DocumentIn], notes: [{doc_id, note}]}` after mapping `ExtractedChart` through `_flatten()`'s conventions. `doc_id` slugified from doc_type + index. Does NOT auto-run the audit.
+- Errors return `{"error": "<human-readable reason>"}` with 4xx — never a traceback.
+
+**`static/index.html`**:
+- "Upload PDF" button + hidden file input in the Documents pane label row; posts multipart to `/intake/pdf`.
+- On success: cache `uploadedDocs`, render them in the left pane with a "from PDF: {filename}" provenance chip per doc; a source toggle (Committed corpus ↔ From upload) appears so the judge can switch back without reloading. `collectDocs()` reads whichever set is displayed — `/audit` and offsets work unchanged.
+- On error: dismissible banner at the top of the left pane showing the server's reason.
+
+## Feature 2 — corrective-action packet
+
+**`engine/packet.py`** (new):
+- `FixDraft` schema `{rule_id, draft_text}`; for each `fail` finding, one `llm.structured()` call: draft the missing documentation grounded in the submitted chart text (e.g., an actual strengths inventory for this patient), clinical register, concise. Per-draft try/except → that finding falls back to its static requirement text. Drafts run under the same semaphore pattern (~3 fails ⇒ ~5s).
+- `render_packet(...) -> str` — standalone HTML via f-string builder with `html.escape` everywhere (no template engine, no new deps). Order per directive: header (rulebook name, 42 CFR § 482.61 + eCFR URL, audit date, elapsed + counts from the client's `done` payload); summary table (rule id, verdict chip, one-line status from rationale); findings detail for every fail/unclear (verbatim requirement, rationale, evidence status); drafted corrective documentation — each draft labeled **"DRAFT — for clinician review and signature. Not part of the medical record until reviewed, edited as needed, and signed."**, with any fallback items listed under a header carrying the same label; sign-off block (name / credential / date / signature lines). Print CSS: page margins, serif document styling, no app chrome, sensible page breaks.
+
+**`main.py`**: `POST /packet` accepts `{rulebook_id, documents, findings, counts, elapsed_s}` → returns the HTML with `Content-Disposition: attachment; filename="corrective_action_report.html"`.
+
+**`static/index.html`**: "Download report" button, disabled until a `done` event arrives; posts the stored last-run findings/documents/counts and saves the blob.
+
+## Fixtures
+
+`scripts/make_fixture_pdfs.py` writes two HTML files (different visual identity: "Lakeshore Behavioral Health" header/footer with page numbers, different heading vocabulary — "Presenting Problem", "Clinical Impressions", "Care Team Signatures" — same clinical content shape: intake + treatment plan + 3 progress notes) → converted to PDF with the already-installed gstack `browse` daemon's `pdf` command (no new Python deps). Same four planted gaps as `chart_clean.json`. `corpus/sample_export_broken.pdf` = same minus the legal-status/consent line (flips 482.61(a)(1) red). Committed as fixtures; the `corpus/*.json` loader ignores non-JSON files (glob already `*.json`).
+
+## Order of work (per directive timeboxes)
+
+1. `/intake/pdf` + structuring + UI upload
+2. Fixture PDFs + end-to-end test that `sample_export.pdf` flags the four gaps
+3. `/packet` + download button
+4. Broken-variant PDF
+
+## Verification (definition of done, run twice)
+
+1. `curl -F file=@corpus/sample_export.pdf /intake/pdf` → documents with faithful text; verify a known sentence survives verbatim (substring check against the PDF's source HTML).
+2. POST those documents to `/audit` → the four planted gaps flag with the intended verdicts; passes carry verified spans.
+3. Browser (gstack browse): upload via the UI button → docs render with provenance chips → run audit → delete a line in extracted text → re-run → watch the rule flip → click "Download report" → packet opens standalone, contains verbatim §482.61 text for each failure and the DRAFT-labeled fixes, prints cleanly (check with browse `pdf` render).
+4. Scanned-PDF error path: upload an image-only PDF → dismissible banner with the OCR-out-of-scope message.
+5. Broken variant audit → (a)(1) additionally red.
+
+```
+
+```text
+The file /Users/johnzhang/.claude/plans/build-out-the-hackathon-plan-md-shiny-ullman.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:26Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="ExitPlanMode"><details>
+<summary>Tool use: **ExitPlanMode**</summary>
+
+```text
+User has approved your plan. You can now start coding. Start with updating your todo list if applicable
+
+Your plan has been saved to: /Users/johnzhang/.claude/plans/build-out-the-hackathon-plan-md-shiny-ullman.md
+You can refer back to it if needed during implementation.
+
+## Approved Plan:
+# Redline extension — PDF intake + corrective-action packet
+
+## Context
+
+Redline (built earlier this session, live at localhost:8000) audits documents against a rulebook and streams verified findings. `PDF_INTAKE_DIRECTIVE.md` specifies the final extension: (1) **PDF intake** — a judge drops in an unseen EHR chart export, we extract it into the editable pane and audit it with the unchanged engine; (2) **corrective-action packet** — a downloadable, print-ready HTML report with findings, verbatim citations, LLM-drafted fixes (user confirmed: draft at packet time, with fallback), and sign-off lines. Priority: Feature 1 complete beats both partial. All DO-NOTs in the directive are binding: no OCR, no in-PDF rendering, no PDF-generation library, no `source_type` branching in `engine/`, no upload persistence.
+
+## Reuse (all from this session's code)
+
+- `engine/llm.py` `AnthropicLLM.structured()` — both new LLM calls (chart structuring, fix drafting) go through it; it already takes `max_tokens` per call.
+- `main.py` `_flatten()` — the extracted sections map onto the same `{sections:[{heading,text}]}` shape, so flattening + `(left blank)` conventions are reused verbatim.
+- `engine/schemas.py` `DocumentIn`, `Finding` — `/audit` contract untouched; `/packet` request reuses both.
+- Per-unit error isolation pattern from `evaluate.py` — applied to per-fail draft generation.
+
+## Feature 1 — PDF intake
+
+**Deps** (pyproject.toml): add `pypdf` (text extraction) and `python-multipart` (FastAPI uploads).
+
+**`engine/intake.py`** (new):
+- `extract_text(pdf_bytes) -> str` via pypdf, pages joined with page-break markers. If total extracted text is near-empty (< ~200 chars), raise a typed error → endpoint returns structured 422: *"This PDF appears to be scanned (no text layer). OCR is out of scope."*
+- Structuring schemas (pydantic, used as `response_model`): `ExtractedSection{heading, text}`, `ExtractedDocument{doc_type, date ("" if unstated, else YYYY-MM-DD), extraction_note, sections}`, `ExtractedChart{documents}`.
+- `structure_chart(raw_text, llm) -> ExtractedChart` — one `llm.structured()` call, `max_tokens=16000`. Prompt: split this clinical chart export into its constituent documents; **preserve source wording exactly — no cleanup, normalization, or summarizing — because downstream evidence verification does exact substring matching against this text**; represent present-but-empty sections with `text: ""`.
+- On any structuring failure: fall back to a single document `{doc_type: "Unstructured chart export", date: "", text: raw_text}` with a note — degraded but auditable.
+
+**`main.py`**:
+- `POST /intake/pdf` (multipart file) → `{filename, documents: [DocumentIn], notes: [{doc_id, note}]}` after mapping `ExtractedChart` through `_flatten()`'s conventions. `doc_id` slugified from doc_type + index. Does NOT auto-run the audit.
+- Errors return `{"error": "<human-readable reason>"}` with 4xx — never a traceback.
+
+**`static/index.html`**:
+- "Upload PDF" button + hidden file input in the Documents pane label row; posts multipart to `/intake/pdf`.
+- On success: cache `uploadedDocs`, render them in the left pane with a "from PDF: {filename}" provenance chip per doc; a source toggle (Committed corpus ↔ From upload) appears so the judge can switch back without reloading. `collectDocs()` reads whichever set is displayed — `/audit` and offsets work unchanged.
+- On error: dismissible banner at the top of the left pane showing the server's reason.
+
+## Feature 2 — corrective-action packet
+
+**`engine/packet.py`** (new):
+- `FixDraft` schema `{rule_id, draft_text}`; for each `fail` finding, one `llm.structured()` call: draft the missing documentation grounded in the submitted chart text (e.g., an actual strengths inventory for this patient), clinical register, concise. Per-draft try/except → that finding falls back to its static requirement text. Drafts run under the same semaphore pattern (~3 fails ⇒ ~5s).
+- `render_packet(...) -> str` — standalone HTML via f-string builder with `html.escape` everywhere (no template engine, no new deps). Order per directive: header (rulebook name, 42 CFR § 482.61 + eCFR URL, audit date, elapsed + counts from the client's `done` payload); summary table (rule id, verdict chip, one-line status from rationale); findings detail for every fail/unclear (verbatim requirement, rationale, evidence status); drafted corrective documentation — each draft labeled **"DRAFT — for clinician review and signature. Not part of the medical record until reviewed, edited as needed, and signed."**, with any fallback items listed under a header carrying the same label; sign-off block (name / credential / date / signature lines). Print CSS: page margins, serif document styling, no app chrome, sensible page breaks.
+
+**`main.py`**: `POST /packet` accepts `{rulebook_id, documents, findings, counts, elapsed_s}` → returns the HTML with `Content-Disposition: attachment; filename="corrective_action_report.html"`.
+
+**`static/index.html`**: "Download report" button, disabled until a `done` event arrives; posts the stored last-run findings/documents/counts and saves the blob.
+
+## Fixtures
+
+`scripts/make_fixture_pdfs.py` writes two HTML files (different visual identity: "Lakeshore Behavioral Health" header/footer with page numbers, different heading vocabulary — "Presenting Problem", "Clinical Impressions", "Care Team Signatures" — same clinical content shape: intake + treatment plan + 3 progress notes) → converted to PDF with the already-installed gstack `browse` daemon's `pdf` command (no new Python deps). Same four planted gaps as `chart_clean.json`. `corpus/sample_export_broken.pdf` = same minus the legal-status/consent line (flips 482.61(a)(1) red). Committed as fixtures; the `corpus/*.json` loader ignores non-JSON files (glob already `*.json`).
+
+## Order of work (per directive timeboxes)
+
+1. `/intake/pdf` + structuring + UI upload
+2. Fixture PDFs + end-to-end test that `sample_export.pdf` flags the four gaps
+3. `/packet` + download button
+4. Broken-variant PDF
+
+## Verification (definition of done, run twice)
+
+1. `curl -F file=@corpus/sample_export.pdf /intake/pdf` → documents with faithful text; verify a known sentence survives verbatim (substring check against the PDF's source HTML).
+2. POST those documents to `/audit` → the four planted gaps flag with the intended verdicts; passes carry verified spans.
+3. Browser (gstack browse): upload via the UI button → docs render with provenance chips → run audit → delete a line in extracted text → re-run → watch the rule flip → click "Download report" → packet opens standalone, contains verbatim §482.61 text for each failure and the DRAFT-labeled fixes, prints cleanly (check with browse `pdf` render).
+4. Scanned-PDF error path: upload an image-only PDF → dismissible banner with the OCR-out-of-scope message.
+5. Broken variant audit → (a)(1) additionally red.
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:31Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskCreate"><details>
+<summary>Tool use: **TaskCreate**</summary>
+pypdf/python-multipart deps, engine/intake.py, POST /intake/pdf, upload button + source toggle + error banner in UI
+
+```text
+Task #5 created successfully: PDF intake: extraction + LLM structuring + UI upload
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:33Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskCreate"><details>
+<summary>Tool use: **TaskCreate**</summary>
+sample_export.pdf (different layout, same 4 gaps) + sample_export_broken.pdf; verify audit flags gaps from extracted text
+
+```text
+Task #6 created successfully: Fixture PDFs + end-to-end intake audit test
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:34Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskCreate"><details>
+<summary>Tool use: **TaskCreate**</summary>
+engine/packet.py (LLM fix drafts w/ fallback + print-ready HTML), POST /packet, Download report button
+
+```text
+Task #7 created successfully: Corrective-action packet + download button
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:41Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #5 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:37:43Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/pyproject.toml has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:38:06Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```python
+"""PDF intake: mechanical text extraction + LLM structuring.
+
+Text extraction is mechanical (pypdf); turning raw text into our document
+structure is judgment, so it goes through the same structured-output path as
+everything else. The one hard constraint: the model must preserve source
+wording EXACTLY, because downstream evidence verification does exact substring
+matching against this text. Any failure degrades to a single unstructured
+document — the audit can still run against it.
+"""
+
+from __future__ import annotations
+
+import io
+import re
+
+from pydantic import BaseModel, Field
+from pypdf import PdfReader
+
+from engine.llm import AnthropicLLM
+
+_MIN_TEXT_CHARS = 200
+
+
+class ScannedPdfError(ValueError):
+    """The PDF has no usable text layer."""
+
+
+class ExtractedSection(BaseModel):
+    heading: str
+    text: str = Field(
+        description=(
+            "The section's text copied EXACTLY from the source, character for "
+            "character. Empty string if the section heading is present but the "
+            "section was left blank."
+        )
+    )
+
+
+class ExtractedDocument(BaseModel):
+    doc_type: str = Field(
+        description="What this document is, e.g. 'Intake Assessment', 'Progress Note (SOAP)'."
+    )
+    date: str = Field(
+        description="The document's date as YYYY-MM-DD if stated anywhere in it, else \"\"."
+    )
+    extraction_note: str = Field(
+        description=(
+            "One short sentence on extraction confidence for this document, e.g. "
+            "'clean extraction' or 'table layout may have garbled the medication list'."
+        )
+    )
+    sections: list[ExtractedSection]
+
+
+class ExtractedChart(BaseModel):
+    documents: list[ExtractedDocument]
+
+
+_STRUCTURE_SYSTEM_PROMPT = """\
+You segment raw text extracted from a clinical chart PDF export into its \
+constituent documents (e.g. intake assessment, treatment plan, progress notes, \
+discharge summary — whatever is actually present).
+
+THE ONE UNBREAKABLE RULE: preserve the source wording EXACTLY, character for \
+character. Do not clean up, normalize whitespace within sentences, fix typos, \
+expand abbreviations, reorder, or summarize. Downstream software verifies \
+audit evidence by exact substring matching against the text you return — any \
+rewording silently breaks the audit. You may omit page headers/footers and \
+page numbers that repeat on every page (they are export chrome, not chart \
+content), and you may drop the line breaks a PDF inserts mid-sentence by \
+joining with a single space, but every sentence's words must survive verbatim.
+
+For each document: identify its type, its date (YYYY-MM-DD) if stated, and its \
+sections as found — use the source's own section headings. If a heading is \
+present but its body is blank or a bare placeholder, return that section with \
+text set to the empty string. Give each document a one-sentence \
+extraction_note on how confident/clean the extraction was.\
+"""
+
+
+def extract_text(pdf_bytes: bytes) -> str:
+    """Pull the text layer out of a PDF. Raises ScannedPdfError if absent."""
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        pages = [(page.extract_text() or "").strip() for page in reader.pages]
+    except Exception as exc:  # malformed file, encryption, etc.
+        raise ValueError(f"Could not read this file as a PDF ({type(exc).__name__}).") from exc
+    raw = "\n\n--- page break ---\n\n".join(p for p in pages if p)
+    if len(raw) < _MIN_TEXT_CHARS:
+        raise ScannedPdfError(
+            "This PDF appears to be scanned (no usable text layer). OCR is out of scope — "
+            "please upload a text-based chart export."
+        )
+    return raw
+
+
+async def structure_chart(raw_text: str, llm: AnthropicLLM) -> ExtractedChart:
+    """One structured LLM call; never raises — falls back to a single
+    unstructured document so a bad structuring call degrades the demo
+    instead of killing it."""
+    try:
+        chart = await llm.structured(
+            system_prompt=_STRUCTURE_SYSTEM_PROMPT,
+            user_prompt=(
+                "# Raw text extracted from the uploaded chart PDF\n\n"
+                f"{raw_text}\n\n"
+                "# Your task\n"
+                "Segment this into its constituent documents per the rules in the "
+                "system prompt and emit the structured result."
+            ),
+            response_model=ExtractedChart,
+            max_tokens=16000,
+        )
+        if chart.documents:
+            return chart
+    except Exception:  # noqa: BLE001 — degrade, never die
+        pass
+    return ExtractedChart(
+        documents=[
+            ExtractedDocument(
+                doc_type="Unstructured chart export",
+                date="",
+                extraction_note=(
+                    "Automatic document segmentation failed; the raw extracted text is "
+                    "presented as a single document. The audit can still run against it."
+                ),
+                sections=[ExtractedSection(heading="Extracted text", text=raw_text)],
+            )
+        ]
+    )
+
+
+def slugify_doc_id(doc_type: str, index: int) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", doc_type.lower()).strip("_") or "document"
+    return f"upload_{index + 1}_{slug}"
+
+```
+
+```text
+File created successfully at: /Users/johnzhang/Documents/GitHub/document_verification/engine/intake.py (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:38:17Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/main.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:38:22Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/main.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:38:38Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:38:45Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:39:15Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:39:27Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Install pypdf/multipart, restart server
+
+```bash
+uv sync 2>&1 | tail -2; lsof -ti :8000 | xargs kill 2>/dev/null; sleep 0.5
+uv run uvicorn main:app --port 8000 > /tmp/redline_server.log 2>&1 &
+sleep 2; curl -s -o /dev/null -w "server: %{http_code}\n" localhost:8000/rulebooks
+```
+
+```text
+ + pypdf==6.14.2
+ + python-multipart==0.0.32
+server: 200
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:39:31Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #6 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:40:27Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```python
+"""Generate the HTML sources for the sample chart-export fixture PDFs.
+
+Writes sample_export.html and sample_export_broken.html to /tmp; convert to
+PDF with the gstack browse daemon:
+
+    browse goto file:///tmp/sample_export.html
+    browse pdf corpus/sample_export.pdf --format letter --print-background
+
+The layout is deliberately NOT our committed corpus: a fake clinic identity
+(Lakeshore Behavioral Health), running header/footer with page numbers, and a
+different section-heading vocabulary ("Presenting Problem", "Clinical
+Impressions", "Care Team Signatures"). Same clinical content shape and the
+same four planted gaps as chart_clean.json:
+
+  1. No strengths inventory anywhere        -> fail 482.61(c)(1)
+  2. Admission reason in clinician voice    -> unclear 482.61(a)(3)
+  3. 23-day gap between notes 2 and 3       -> fail 482.61(d)
+  4. Signature block without responsibilities -> fail 482.61(c)(1)(iv)
+
+The broken variant additionally drops the legal-status/consent line
+-> 482.61(a)(1) also fails.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+LEGAL_STATUS_LINE = (
+    "<p><b>Legal Status:</b> Voluntary admission; consent to treatment signed by "
+    "the patient at registration.</p>"
+)
+
+STYLE = """
+<style>
+  @page { margin: 0.9in 0.8in; }
+  body { font-family: "Times New Roman", serif; font-size: 11.5pt; line-height: 1.45;
+         color: #111; margin: 0; }
+  .clinic-header { display: flex; justify-content: space-between; align-items: baseline;
+         border-bottom: 2.5px solid #14532d; padding: 10px 0 6px; }
+  .clinic-name { font-family: Arial, sans-serif; font-weight: bold; font-size: 13pt;
+         color: #14532d; letter-spacing: .02em; }
+  .clinic-meta { font-family: Arial, sans-serif; font-size: 8pt; color: #555; text-align: right; }
+  .patient-band { background: #eef4ef; font-family: Arial, sans-serif; font-size: 9pt;
+         padding: 5px 10px; margin: 8px 0 14px; display: flex; gap: 22px; }
+  h2 { font-family: Arial, sans-serif; font-size: 11pt; text-transform: uppercase;
+       letter-spacing: .06em; color: #14532d; border-bottom: 1px solid #b9ccbc;
+       padding-bottom: 2px; margin: 22px 0 8px; page-break-after: avoid; }
+  h3 { font-family: Arial, sans-serif; font-size: 9.5pt; text-transform: uppercase;
+       letter-spacing: .05em; color: #333; margin: 14px 0 4px; page-break-after: avoid; }
+  p { margin: 5px 0; }
+  .doc { page-break-before: always; }
+  .doc:first-of-type { page-break-before: auto; }
+  .footer { font-family: Arial, sans-serif; font-size: 7.5pt; color: #777;
+       border-top: 1px solid #ccc; margin-top: 26px; padding-top: 4px;
+       display: flex; justify-content: space-between; }
+  table.sig { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  table.sig td { border-bottom: 1px solid #999; padding: 8px 6px 2px; }
+</style>
+"""
+
+
+def clinic_header(page: int, total: int) -> str:
+    return f"""
+    <div class="clinic-header">
+      <span class="clinic-name">LAKESHORE BEHAVIORAL HEALTH</span>
+      <span class="clinic-meta">2140 N Harbor Dr, Chicago IL 60601<br>
+      Confidential — Chart Export · Page {page} of {total}</span>
+    </div>
+    <div class="patient-band">
+      <span><b>Patient:</b> RIVERA, MARCUS</span>
+      <span><b>DOB:</b> 03/14/1987</span>
+      <span><b>MRN:</b> LBH-40217</span>
+      <span><b>Unit:</b> Adult Inpatient Psychiatry</span>
+    </div>"""
+
+
+def build(include_legal_status: bool) -> str:
+    legal = LEGAL_STATUS_LINE if include_legal_status else ""
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">{STYLE}</head><body>
+
+<div class="doc">
+{clinic_header(1, 5)}
+<h2>Initial Psychiatric Assessment — 06/14/2026</h2>
+<h3>Registration &amp; Identifying Information</h3>
+<p>Marcus Rivera is a 39-year-old married male admitted to the Adult Inpatient
+Psychiatry unit on 06/14/2026 at 9:20 AM. Insurance: Blue Cross Blue Shield of
+Illinois PPO. Emergency contact: Elena Rivera (spouse).</p>
+{legal}
+<h3>Admission Diagnoses</h3>
+<p>Psychiatric: Alcohol use disorder, severe (F10.20); Major depressive disorder,
+moderate, single episode (F32.1). Concurrent medical conditions: essential
+hypertension (I10), untreated; elevated transaminases (R74.01) with AST 68 and
+ALT 54 on outpatient labs obtained three months prior.</p>
+<h3>Presenting Problem</h3>
+<p>The patient was admitted for stabilization of escalating daily alcohol
+consumption accompanied by worsening depressive symptoms and passive suicidal
+ideation, occurring in the setting of marital and occupational stressors.
+Inpatient admission was judged clinically appropriate for supervised withdrawal
+management and initiation of structured treatment.</p>
+<h3>Course of Illness</h3>
+<p>Symptom onset traces to approximately three years ago, when drinking escalated
+from social use to 8-12 standard drinks daily following a stressful job change.
+Mood has declined progressively over the past six months with anhedonia, poor
+sleep, and hopelessness. Two weeks before admission his wife stated she would
+separate if he did not seek treatment; one week before admission his employer
+issued a formal warning and placed him on a 30-day performance improvement plan.
+Three days before admission, after a weekend binge, he experienced passive
+suicidal ideation without plan or intent and presented voluntarily at the urging
+of his wife and outpatient counselor.</p>
+<h3>Mental Status Findings</h3>
+<p>Adequately groomed male appearing stated age with mild bilateral hand tremor.
+Cooperative, fair eye contact, normal speech. Mood "low" with constricted,
+congruent affect. Thought process linear and goal-directed. Passive suicidal
+ideation without plan or intent; no homicidal ideation, delusions, or
+hallucinations. Alert and oriented x4; attention and memory grossly intact.
+Insight fair, judgment fair. Estimated intellectual functioning average to above
+average.</p>
+<h3>Psychosocial Review</h3>
+<p>Raised in Chicago, second of three children; father had alcohol use disorder.
+Bachelor's degree in business; employed six years as a project manager at a
+logistics firm. Married 11 years with two children ages 6 and 9. Discharge
+housing plan is return to the family home, which is stable with no safety
+concerns. Spouse was interviewed 06/15/2026: she supports treatment and will
+attend family sessions, though she reports exhaustion and states the marriage
+depends on his sobriety. Community resources: contact information provided for
+the Lakeview Alcoholics Anonymous group and a referral initiated to the
+Northside Intensive Outpatient Program; the outpatient counselor was contacted
+with patient consent.</p>
+<h3>Substance History</h3>
+<p>Alcohol: 8-12 standard drinks daily for approximately three years; first use
+at age 16. One prior withdrawal episode in 2023 (tremor, sweating, anxiety),
+self-resolved. Morning tremor currently present. Completed a 12-week outpatient
+program in 2023 with relapse within four months. Cannabis: occasional social
+use. Tobacco and other substances: denied. DAST-10 score 6; AUDIT-C positive.</p>
+<h3>Spiritual and Cultural Considerations</h3>
+<p>Not addressed at intake.</p>
+<h3>Evaluation Timing</h3>
+<p>This psychiatric evaluation was completed 06/15/2026 at 2:30 PM by the
+attending psychiatrist, within 60 hours of admission on 06/14/2026 at 9:20 AM.</p>
+<div class="footer"><span>LBH Form 12-A rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+<div class="doc">
+{clinic_header(2, 5)}
+<h2>Individualized Plan of Care — 06/15/2026</h2>
+<h3>Confirmed Diagnoses</h3>
+<p>(1) Alcohol use disorder, severe (F10.20), supported by three years of daily
+heavy use, a prior withdrawal episode, examination tremor, elevated
+transaminases (AST 68, ALT 54), a failed outpatient treatment with early
+relapse, and continued use despite marital and occupational consequences.
+(2) Major depressive disorder, moderate (F32.1), supported by six months of
+depressed mood, anhedonia, insomnia, hopelessness, and passive suicidal
+ideation on mental status examination.</p>
+<h3>Identified Problems</h3>
+<p>Problem 1: Physiological alcohol dependence with morning tremor and prior
+withdrawal. Problem 2: Depressed mood with passive suicidal ideation. Problem
+3: Impaired occupational functioning under a 30-day performance improvement
+plan. Problem 4: Marital discord secondary to substance use. Problem 5:
+Untreated hypertension and alcohol-related transaminase elevation. Problem 6:
+History of relapse within four months of completing prior treatment.</p>
+<h3>Goals of Care</h3>
+<p>During hospitalization: complete alcohol withdrawal management without
+complication with CIWA-Ar below 8 for 48 consecutive hours; reduce PHQ-9 from
+16 to below 10 by discharge; remain free of suicidal ideation for 72 hours
+before discharge with a completed written safety plan. Following discharge:
+sustained abstinence at 6 and 12 months supported by naltrexone adherence and
+intensive outpatient participation; return to full occupational functioning;
+re-engagement in the marital relationship through at least six couples-focused
+aftercare sessions.</p>
+<h3>Planned Interventions</h3>
+<p>Supervised alcohol withdrawal per CIWA-Ar protocol with symptom-triggered
+lorazepam. Naltrexone 50 mg by mouth daily beginning 06/16/2026 after liver
+function review. Cognitive behavioral therapy group 60 minutes daily.
+Motivational interviewing individually twice weekly. Relapse-prevention
+psychoeducation group three times weekly. One structured family session with
+the spouse before discharge. Lisinopril 10 mg daily for hypertension with a
+repeat liver panel.</p>
+<h3>Care Team Signatures</h3>
+<table class="sig">
+<tr><td>R. Okafor, MD — Attending Psychiatrist</td><td>06/15/2026</td></tr>
+<tr><td>J. Lindqvist, RN — Charge Nurse</td><td>06/15/2026</td></tr>
+<tr><td>D. Marsh, LCSW — Social Worker</td><td>06/15/2026</td></tr>
+<tr><td>A. Chen, CADC — Addictions Counselor</td><td>06/15/2026</td></tr>
+</table>
+<div class="footer"><span>LBH Form 31-C rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+<div class="doc">
+{clinic_header(3, 5)}
+<h2>Nursing Progress Note — 06/14/2026</h2>
+<h3>Observations</h3>
+<p>Patient states he is "nervous but glad to be here." Last drink reported
+approximately 14 hours before admission. Vital signs stable; mild bilateral
+hand tremor; CIWA-Ar score 6. Oriented x4 and cooperative on the unit.</p>
+<h3>Clinical Impressions</h3>
+<p>Early mild alcohol withdrawal. Mood depressed but engaged with the admission
+process; no suicidal ideation expressed this shift.</p>
+<h3>Plan of Care</h3>
+<p>Continue CIWA-Ar monitoring every 4 hours, encourage fluids, orient to unit
+schedule; psychiatric evaluation scheduled with Dr. Okafor.</p>
+<div class="footer"><span>LBH Form 22-N rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+<div class="doc">
+{clinic_header(4, 5)}
+<h2>Clinical Progress Note — 06/21/2026</h2>
+<h3>Interval Data</h3>
+<p>Withdrawal management completed without complication; CIWA-Ar below 8 since
+06/18/2026 and the protocol was discontinued. Attended all CBT groups this week
+and both individual motivational interviewing sessions. Naltrexone tolerated
+without side effects. PHQ-9 today 12, down from 16 at admission. Wife visited
+06/20/2026; the interaction was observed to be warm.</p>
+<h3>Clinical Impressions</h3>
+<p>Meaningful early progress against short-term goals: the withdrawal goal is
+met, depressive symptoms are improving, and engagement is strong. Ambivalence
+about long-term abstinence persists; the patient stated in group that he
+believes he "could probably drink normally someday."</p>
+<h3>Plan of Care</h3>
+<p>Continue current interventions. The team recommends adding a
+relapse-prevention focus on workplace triggers in individual sessions. No
+revision to plan goals at this time; PHQ-9 to be repeated in one week.</p>
+<div class="footer"><span>LBH Form 22-N rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+<div class="doc">
+{clinic_header(5, 5)}
+<h2>Clinical Progress Note — 07/14/2026</h2>
+<h3>Interval Data</h3>
+<p>Patient remains abstinent on the unit; naltrexone continued at 50 mg daily.
+PHQ-9 today 8. Attended a family session with his spouse on 07/11/2026,
+described by both as productive. Patient states: "I told Elena everything. She
+didn't blow up. I think that means something."</p>
+<h3>Clinical Impressions</h3>
+<p>Depressive symptoms are now below the short-term goal threshold; a safety
+plan has been drafted and reviewed. The patient verbalizes commitment to
+intensive outpatient step-down and AA attendance. Progress is consistent with
+the plan of care; discharge planning is appropriate to begin.</p>
+<h3>Plan of Care</h3>
+<p>Recommend revising the plan of care to reflect the discharge preparation
+phase: finalize the intensive outpatient intake date, complete the written
+safety plan, and schedule discharge medication reconciliation.</p>
+<div class="footer"><span>LBH Form 22-N rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+</body></html>"""
+
+
+if __name__ == "__main__":
+    out = Path("/tmp")
+    (out / "sample_export.html").write_text(build(include_legal_status=True))
+    (out / "sample_export_broken.html").write_text(build(include_legal_status=False))
+    print("wrote /tmp/sample_export.html and /tmp/sample_export_broken.html")
+
+```
+
+```text
+File created successfully at: /Users/johnzhang/Documents/GitHub/document_verification/scripts/make_fixture_pdfs.py (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:40:57Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add discharge summary page to fixture script, generate HTML
+
+```bash
+python3 - <<'EOF'
+import re
+p = 'scripts/make_fixture_pdfs.py'
+src = open(p).read()
+# 5 pages -> 6
+src = src.replace('clinic_header(1, 5)', 'clinic_header(1, 6)').replace('clinic_header(2, 5)', 'clinic_header(2, 6)').replace('clinic_header(3, 5)', 'clinic_header(3, 6)').replace('clinic_header(4, 5)', 'clinic_header(4, 6)').replace('clinic_header(5, 5)', 'clinic_header(5, 6)')
+discharge = '''
+<div class="doc">
+{clinic_header(6, 6)}
+<h2>Discharge Summary — 07/18/2026</h2>
+<h3>Hospital Course</h3>
+<p>Mr. Rivera was admitted voluntarily on 06/14/2026 for severe alcohol use
+disorder with early withdrawal and moderate major depressive disorder with
+passive suicidal ideation. He completed symptom-triggered withdrawal management
+by 06/18/2026 without complication. Naltrexone 50 mg daily was initiated and
+tolerated. He participated consistently in daily CBT group, twice-weekly
+motivational interviewing, and relapse-prevention psychoeducation, and
+completed one family session with his spouse. Depressive symptoms improved
+steadily (PHQ-9 16 at admission, 8 before discharge) and suicidal ideation
+resolved by the second week. Hypertension was managed with lisinopril 10 mg
+daily; a repeat liver panel on 07/10/2026 showed improving transaminases
+(AST 51, ALT 44).</p>
+<h3>Status at Discharge</h3>
+<p>At discharge on 07/18/2026 the patient is medically stable, abstinent from
+alcohol for the duration of the admission, and denies suicidal ideation, with a
+completed written safety plan. Mood is euthymic with brighter affect; insight
+and judgment are improved. He is motivated for continued treatment and has
+family support at home.</p>
+<h3>Aftercare Instructions</h3>
+<p>Intake at the Northside Intensive Outpatient Program on 07/21/2026, three
+evenings weekly. Continue naltrexone 50 mg daily with psychiatry follow-up in
+two weeks. Continue lisinopril 10 mg daily with primary care follow-up within
+30 days including a repeat liver panel. Attend Alcoholics Anonymous at least
+twice weekly. Couples-focused family sessions through the intensive outpatient
+program. Return to the emergency department if suicidal ideation recurs; the
+crisis line number is on the written safety plan.</p>
+<div class="footer"><span>LBH Form 44-D rev 3/2025</span><span>Printed 07/30/2026</span></div>
+</div>
+
+</body></html>'''
+src = src.replace('\n</body></html>"""', discharge + '"""')
+open(p, 'w').write(src)
+print('patched')
+EOF
+uv run python scripts/make_fixture_pdfs.py
+```
+
+```text
+patched
+wrote /tmp/sample_export.html and /tmp/sample_export_broken.html
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:41:09Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Convert fixture HTML to PDFs and verify text layer
+
+```bash
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+$B goto file:///tmp/sample_export.html && $B pdf corpus/sample_export.pdf --format letter --print-background
+$B goto file:///tmp/sample_export_broken.html && $B pdf corpus/sample_export_broken.pdf --format letter --print-background
+ls -la corpus/*.pdf
+uv run python -c "
+from pypdf import PdfReader
+r = PdfReader('corpus/sample_export.pdf')
+text = '\n'.join(p.extract_text() or '' for p in r.pages)
+print('pages:', len(r.pages), '| chars:', len(text))
+for probe in ['LAKESHORE BEHAVIORAL HEALTH', 'Presenting Problem', 'Care Team Signatures', 'Legal Status: Voluntary admission']:
+    print(f'{probe!r:45} ->', probe in text)
+rb = PdfReader('corpus/sample_export_broken.pdf')
+tb = '\n'.join(p.extract_text() or '' for p in rb.pages)
+print('broken variant omits legal status:', 'Legal Status' not in tb)
+"
+```
+
+```text
+[browse] Starting server...
+Navigated to file:///tmp/sample_export.html (200)
+PDF saved: corpus/sample_export.pdf
+Navigated to file:///tmp/sample_export_broken.html (200)
+PDF saved: corpus/sample_export_broken.pdf
+-rw-r--r--@ 1 johnzhang  staff  205872 Aug  1 14:41 corpus/sample_export_broken.pdf
+-rw-r--r--@ 1 johnzhang  staff  219600 Aug  1 14:41 corpus/sample_export.pdf
+pages: 8 | chars: 11340
+'LAKESHORE BEHAVIORAL HEALTH'                 -> True
+'Presenting Problem'                          -> False
+'Care Team Signatures'                        -> False
+'Legal Status: Voluntary admission'           -> True
+broken variant omits legal status: True
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:41:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check uppercase headings in PDF text layer
+
+```bash
+uv run python -c "
+from pypdf import PdfReader
+text = '\n'.join(p.extract_text() or '' for p in PdfReader('corpus/sample_export.pdf').pages)
+print('PRESENTING PROBLEM' in text, 'CARE TEAM SIGNATURES' in text)
+print(repr(text[1200:1650]))
+"
+```
+
+```text
+True True
+'thdrawal\nmanagement and initiation of structured treatment.\nCOURSE OF ILLNESS\nSymptom onset traces to approximately three years ago, when drinking escalated from social use to 8-12\nstandard drinks daily following a stressful job change. Mood has declined progressively over the past six\nmonths with anhedonia, poor sleep, and hopelessness. Two weeks before admission his wife stated she\nwould separate if he did not seek treatment; one week before ad'
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:42:11Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Upload fixture PDF to intake endpoint, check extraction fidelity
+
+```bash
+curl -s -X POST localhost:8000/intake/pdf -F "file=@corpus/sample_export.pdf" -o /tmp/intake_resp.json -w "HTTP %{http_code}\n"
+python3 -c "
+import json
+r = json.load(open('/tmp/intake_resp.json'))
+if 'error' in r: print('ERROR:', r['error']); raise SystemExit(1)
+print('filename:', r['filename'])
+for d, n in zip(r['documents'], r['notes']):
+    print(f\"  {d['doc_id']:45} date={d['date'] or '(none)':12} chars={len(d['text']):5}  note: {n['note'][:60]}\")
+# verbatim fidelity probe: these exact sentences exist in the PDF text layer
+full = ' '.join(d['text'] for d in r['documents'])
+probes = [
+  'Legal Status: Voluntary admission; consent to treatment signed by the patient at registration.',
+  'he experienced passive suicidal ideation without plan or intent',
+  'R. Okafor, MD',
+]
+for p in probes:
+    print('verbatim?', p in full, '|', p[:55])
+json.dump({'rulebook_id':'cms_psych','documents':r['documents']}, open('/tmp/pdf_audit_req.json','w'))
+"
+```
+
+```text
+HTTP 200
+filename: sample_export.pdf
+  upload_1_initial_psychiatric_assessment       date=2026-06-14   chars= 3594  note: Clean extraction; page header/footer chrome omitted.
+  upload_2_individualized_plan_of_care          date=2026-06-15   chars= 2238  note: Clean extraction; signature block preserved with line breaks
+  upload_3_nursing_progress_note                date=2026-06-14   chars=  538  note: Clean extraction.
+  upload_4_clinical_progress_note               date=2026-06-21   chars=  904  note: Clean extraction.
+  upload_5_clinical_progress_note               date=2026-07-14   chars=  827  note: Clean extraction.
+  upload_6_discharge_summary                    date=2026-07-18   chars= 1677  note: Clean extraction.
+verbatim? True | Legal Status: Voluntary admission; consent to treatment
+verbatim? True | he experienced passive suicidal ideation without plan o
+verbatim? True | R. Okafor, MD
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:42:15Z)**_
+
+Extraction is clean — 6 documents, correct dates, verbatim probes all pass. Now audit the extracted documents.
+
+_**Agent (claude-fable-5 2026-08-01 21:42:35Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Audit the PDF-extracted documents
+
+```bash
+curl -sN -X POST localhost:8000/audit -H 'Content-Type: application/json' -d @/tmp/pdf_audit_req.json | python3 -c "
+import sys, json
+findings = {}
+for line in sys.stdin:
+    if line.startswith('data: '):
+        d = json.loads(line[6:])
+        if 'rule_id' in d: findings[d['rule_id']] = d
+        else: print('DONE:', d)
+for rid, f in sorted(findings.items()):
+    span = 'span✓' if f['char_start'] is not None else '  —  '
+    print(f\"{rid:22} {f['verdict']:8} {span} {f['rationale'][:95]}\")
+json.dump(findings, open('/tmp/pdf_run1.json','w'))
+"
+```
+
+```text
+DONE: {'counts': {'pass': 10, 'fail': 3, 'unclear': 1}, 'elapsed_s': 15.6}
+482.61(a)(1)           pass     span✓ The registration and identifying information section explicitly states the patient's legal stat
+482.61(a)(2)           pass     span✓ The initial assessment lists ADMISSION DIAGNOSES including both psychiatric diagnoses and concu
+482.61(a)(3)           unclear  span✓ The Presenting Problem section states the reason for admission only in clinician third-person f
+482.61(a)(4)           pass     span✓ The Psychosocial Review section contains a social history (upbringing, family, education, emplo
+482.61(b)(1)           pass     span✓ The initial psychiatric assessment documents admission 06/14/2026 9:20 AM and completion 06/15/
+482.61(b)(3)           pass     span✓ The initial psychiatric assessment contains a dedicated MENTAL STATUS FINDINGS section covering
+482.61(b)(4)           pass     span✓ The Course of Illness section documents onset three years prior, six-month mood decline, and th
+482.61(c)(1)           fail       —   The Individualized Plan of Care lists only confirmed diagnoses, six identified problems, goals,
+482.61(c)(1)(i)        pass     span✓ The individualized plan of care lists confirmed diagnoses each explicitly tied to clinical find
+482.61(c)(1)(ii)       pass     span✓ The plan of care's Goals of Care section distinguishes goals "During hospitalization" (short-te
+482.61(c)(1)(iii)      pass     span✓ The individualized plan of care lists specific named modalities with doses and frequencies, inc
+482.61(c)(1)(iv)       fail       —   The plan of care lists interventions and a signature block ('R. Okafor, MD — Attending Psychiat
+482.61(d)              fail       —   Admission 2026-06-14; progress notes dated 2026-06-14, 2026-06-21, 2026-07-14. The gap of 23 da
+482.61(e)              pass     span✓ The discharge summary contains a HOSPITAL COURSE recapitulation, a STATUS AT DISCHARGE section
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:44:43Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rehearsal run 2 + broken-variant audit
+
+```bash
+echo "=== rehearsal run 2: fresh intake + audit ==="
+curl -s -X POST localhost:8000/intake/pdf -F "file=@corpus/sample_export.pdf" | python3 -c "
+import sys, json
+r = json.load(sys.stdin)
+print('docs:', len(r['documents']))
+json.dump({'rulebook_id':'cms_psych','documents':r['documents']}, open('/tmp/pdf_audit_req2.json','w'))
+"
+curl -sN -X POST localhost:8000/audit -H 'Content-Type: application/json' -d @/tmp/pdf_audit_req2.json | grep '^data' | python3 -c "
+import sys, json
+v = {}
+for line in sys.stdin:
+    d = json.loads(line[6:])
+    if 'rule_id' in d: v[d['rule_id']] = d['verdict']
+    else: print('counts:', d['counts'])
+prev = {k: f['verdict'] for k, f in json.load(open('/tmp/pdf_run1.json')).items()}
+flaps = {k: (prev[k], v[k]) for k in v if v[k] != prev.get(k)}
+print('vs run 1:', 'IDENTICAL' if not flaps else f'FLAPS: {flaps}')
+"
+echo "=== broken variant: expect (a)(1) also red ==="
+curl -s -X POST localhost:8000/intake/pdf -F "file=@corpus/sample_export_broken.pdf" | python3 -c "
+import sys, json
+r = json.load(sys.stdin)
+json.dump({'rulebook_id':'cms_psych','documents':r['documents']}, open('/tmp/pdf_broken_req.json','w'))
+print('docs:', len(r['documents']))
+"
+curl -sN -X POST localhost:8000/audit -H 'Content-Type: application/json' -d @/tmp/pdf_broken_req.json | grep '^data' | python3 -c "
+import sys, json
+for line in sys.stdin:
+    d = json.loads(line[6:])
+    if d.get('rule_id') == '482.61(a)(1)':
+        print('(a)(1):', d['verdict'], '|', d['rationale'][:100])
+    elif 'counts' in d: print('counts:', d['counts'])
+"
+```
+
+```text
+=== rehearsal run 2: fresh intake + audit ===
+docs: 6
+counts: {'pass': 10, 'fail': 3, 'unclear': 1}
+vs run 1: IDENTICAL
+=== broken variant: expect (a)(1) also red ===
+docs: 6
+(a)(1): unclear | The registration/identifying information section of the initial assessment lists age, marital status
+counts: {'pass': 9, 'fail': 3, 'unclear': 2}
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:45:03Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/rules/cms_psych.json has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:45:44Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Restart server with updated rule, re-test broken variant twice
+
+```bash
+lsof -ti :8000 | xargs kill 2>/dev/null; sleep 0.5
+uv run uvicorn main:app --port 8000 > /tmp/redline_server.log 2>&1 &
+sleep 2
+for i in 1 2; do
+curl -sN -X POST localhost:8000/audit -H 'Content-Type: application/json' -d @/tmp/pdf_broken_req.json | grep '^data' | python3 -c "
+import sys, json
+for line in sys.stdin:
+    d = json.loads(line[6:])
+    if d.get('rule_id') == '482.61(a)(1)': print('run $i (a)(1):', d['verdict'])
+    elif 'counts' in d: print('  counts:', d['counts'])
+"
+done
+```
+
+```text
+run 1 (a)(1): unclear
+  counts: {'pass': 9, 'fail': 3, 'unclear': 2}
+run 2 (a)(1): unclear
+  counts: {'pass': 9, 'fail': 3, 'unclear': 2}
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:46:02Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/scripts/make_fixture_pdfs.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:46:03Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #6 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:46:03Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #7 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:46:54Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```python
+"""Corrective-action packet: LLM-drafted fixes + print-ready standalone HTML.
+
+HTML, not PDF generation — browser print-to-PDF covers anyone who wants a PDF.
+Every draft is grounded in the submitted chart text and carries the
+clinician-review label; a failed draft call degrades that finding to a static
+statement of what documentation is required (same isolation philosophy as the
+audit itself: one bad call costs one section, not the packet).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import html
+from datetime import date
+
+from pydantic import BaseModel, Field
+
+from engine.llm import AnthropicLLM
+from engine.schemas import DocumentIn, Finding, Rulebook
+
+DRAFT_LABEL = (
+    "DRAFT — for clinician review and signature. Not part of the medical record "
+    "until reviewed, edited as needed, and signed."
+)
+
+_DRAFT_CONCURRENCY = 3
+
+
+class FixDraft(BaseModel):
+    draft_text: str = Field(
+        description=(
+            "The drafted documentation that would satisfy the failed requirement, "
+            "written in clinical register, grounded only in facts present in the "
+            "chart. Plain text; short paragraphs or a labeled list as appropriate."
+        )
+    )
+
+
+_DRAFT_SYSTEM_PROMPT = """\
+You draft missing clinical documentation to remediate a specific compliance \
+finding. Rules:
+- Ground every statement ONLY in facts already present in the chart provided. \
+Do not invent clinical facts, dates, names, scores, or events.
+- Write in concise clinical register, ready for a clinician to review, edit, \
+and sign. No meta-commentary, no explanations of what you are doing.
+- Draft exactly the documentation the requirement asks for — no more.\
+"""
+
+
+async def draft_fixes(
+    fails: list[Finding], documents: list[DocumentIn], llm: AnthropicLLM
+) -> dict[str, str | None]:
+    """One draft per fail finding; None where the call failed (caller falls
+    back to the static requirement statement)."""
+    chart = "\n\n".join(
+        f"<document type=\"{d.doc_type}\" date=\"{d.date}\">\n{d.text}\n</document>"
+        for d in documents
+    )
+    semaphore = asyncio.Semaphore(_DRAFT_CONCURRENCY)
+
+    async def one(f: Finding) -> tuple[str, str | None]:
+        prompt = (
+            f"# Failed requirement ({f.rule_id})\n{f.requirement_verbatim}\n\n"
+            f"# Why it failed\n{f.rationale}\n\n"
+            f"# The patient's chart\n{chart}\n\n"
+            "# Your task\nDraft the documentation that would satisfy this "
+            "requirement for this specific patient."
+        )
+        try:
+            async with semaphore:
+                draft = await llm.structured(
+                    system_prompt=_DRAFT_SYSTEM_PROMPT,
+                    user_prompt=prompt,
+                    response_model=FixDraft,
+                    max_tokens=2048,
+                )
+            return f.rule_id, draft.draft_text
+        except Exception:  # noqa: BLE001 — one bad draft costs one section
+            return f.rule_id, None
+
+    return dict(await asyncio.gather(*(one(f) for f in fails)))
+
+
+# --- HTML rendering ----------------------------------------------------------
+
+_CHIP_COLORS = {"pass": "#1a7f4b", "fail": "#c8102e", "unclear": "#b45309"}
+
+_PACKET_CSS = """
+  @page { margin: 1in 0.9in; }
+  * { box-sizing: border-box; }
+  body { font-family: Georgia, "Times New Roman", serif; color: #1c1917;
+         font-size: 12pt; line-height: 1.5; max-width: 7.5in; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 20pt; margin: 0 0 2px; letter-spacing: .01em; }
+  .subtitle { color: #57534e; margin: 0 0 4px; }
+  .meta { font-family: "Courier New", monospace; font-size: 9.5pt; color: #57534e;
+          border-top: 2.5px solid #1c1917; border-bottom: 1px solid #d6d0c4;
+          padding: 8px 0; margin: 14px 0 24px; }
+  h2 { font-size: 12pt; text-transform: uppercase; letter-spacing: .1em;
+       border-bottom: 1px solid #1c1917; padding-bottom: 3px; margin: 30px 0 12px;
+       page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  th { text-align: left; font-size: 9pt; text-transform: uppercase; letter-spacing: .08em;
+       border-bottom: 1.5px solid #1c1917; padding: 4px 8px; }
+  td { border-bottom: 1px solid #e2ddd3; padding: 5px 8px; vertical-align: top; }
+  .chip { font-family: "Courier New", monospace; font-size: 8.5pt; font-weight: bold;
+          text-transform: uppercase; letter-spacing: .08em; }
+  .finding { page-break-inside: avoid; margin-bottom: 22px; }
+  .finding h3 { font-size: 11.5pt; margin: 0 0 6px; }
+  blockquote.reg { border-left: 3px solid #1c1917; margin: 8px 0; padding: 6px 14px;
+                   background: #f7f4ee; font-style: italic; }
+  .label { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .1em;
+           color: #57534e; margin: 10px 0 3px; font-family: Arial, sans-serif; }
+  .draft-box { border: 1.5px solid #1c1917; padding: 12px 16px; margin: 8px 0;
+               page-break-inside: avoid; }
+  .draft-label { font-family: Arial, sans-serif; font-size: 8.5pt; font-weight: bold;
+                 text-transform: uppercase; letter-spacing: .06em; color: #c8102e;
+                 margin-bottom: 8px; }
+  .signoff { margin-top: 36px; page-break-inside: avoid; }
+  .signoff table td { border-bottom: 1px solid #1c1917; height: 34px; }
+  .signoff .cap { font-size: 8.5pt; color: #57534e; border-bottom: none; height: auto;
+                  padding-top: 2px; font-family: Arial, sans-serif; }
+  @media print { body { padding: 0; } }
+"""
+
+
+def _e(s: str) -> str:
+    return html.escape(s or "")
+
+
+def _chip(verdict: str) -> str:
+    return f'<span class="chip" style="color:{_CHIP_COLORS[verdict]}">{verdict}</span>'
+
+
+def _status_line(f: Finding) -> str:
+    first = f.rationale.split(". ")[0].rstrip(".")
+    return first + "."
+
+
+def render_packet(
+    rulebook: Rulebook,
+    findings: list[Finding],
+    counts: dict[str, int],
+    elapsed_s: float,
+    drafts: dict[str, str | None],
+) -> str:
+    today = date.today().isoformat()
+    order = {r.rule_id: i for i, r in enumerate(rulebook.rules)}
+    findings = sorted(findings, key=lambda f: order.get(f.rule_id, 999))
+    flagged = [f for f in findings if f.verdict in ("fail", "unclear")]
+    fails = [f for f in findings if f.verdict == "fail"]
+
+    parts = [
+        f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<title>Corrective Action Report — {_e(rulebook.name)}</title>"
+        f"<style>{_PACKET_CSS}</style></head><body>",
+        "<h1>Corrective Action Report</h1>",
+        f"<p class='subtitle'>{_e(rulebook.name)}</p>",
+        f"<div class='meta'>Source: {_e(rulebook.source)} &nbsp;·&nbsp; "
+        f"{_e(rulebook.source_url)}<br>"
+        f"Audit date: {today} &nbsp;·&nbsp; Completed in {elapsed_s}s &nbsp;·&nbsp; "
+        f"{counts.get('pass', 0) + counts.get('fail', 0) + counts.get('unclear', 0)} rules — "
+        f"{counts.get('pass', 0)} pass / {counts.get('fail', 0)} fail / "
+        f"{counts.get('unclear', 0)} unclear</div>",
+    ]
+
+    # 2. Summary table
+    parts.append("<h2>Summary of Findings</h2><table>")
+    parts.append("<tr><th>Rule</th><th>Verdict</th><th>Status</th></tr>")
+    for f in findings:
+        parts.append(
+            f"<tr><td style='white-space:nowrap'>§{_e(f.rule_id)}</td>"
+            f"<td>{_chip(f.verdict)}</td><td>{_e(_status_line(f))}</td></tr>"
+        )
+    parts.append("</table>")
+
+    # 3. Findings detail (fail + unclear)
+    parts.append("<h2>Findings Requiring Action</h2>")
+    if not flagged:
+        parts.append("<p>No failed or unclear findings — no corrective action required.</p>")
+    for f in flagged:
+        parts.append("<div class='finding'>")
+        parts.append(f"<h3>§{_e(f.rule_id)} — {_chip(f.verdict)}</h3>")
+        parts.append("<div class='label'>The regulation requires (verbatim)</div>")
+        parts.append(f"<blockquote class='reg'>{_e(f.requirement_verbatim)}</blockquote>")
+        parts.append("<div class='label'>Audit finding</div>")
+        parts.append(f"<p>{_e(f.rationale)}</p>")
+        parts.append("<div class='label'>Evidence status</div>")
+        if f.evidence:
+            parts.append(
+                f"<p>Closest span located in <i>{_e(f.doc_id or '')}</i>: "
+                f"&ldquo;{_e(f.evidence)}&rdquo; — judged not to satisfy the requirement.</p>"
+            )
+        else:
+            parts.append(
+                "<p>No text satisfying this requirement was found in the documents audited.</p>"
+            )
+        parts.append("</div>")
+
+    # 4. Drafted corrective documentation
+    parts.append("<h2>Drafted Corrective Documentation</h2>")
+    if not fails:
+        parts.append("<p>No failed findings — nothing to draft.</p>")
+    for f in fails:
+        draft = drafts.get(f.rule_id)
+        parts.append("<div class='draft-box'>")
+        parts.append(f"<div class='draft-label'>{_e(DRAFT_LABEL)}</div>")
+        parts.append(f"<div class='label'>Remediates §{_e(f.rule_id)}</div>")
+        if draft:
+            body = "".join(f"<p>{_e(p)}</p>" for p in draft.split("\n\n") if p.strip())
+            parts.append(body)
+        else:
+            parts.append(
+                "<p><b>Documentation to be added by the treatment team:</b> "
+                f"{_e(f.requirement_verbatim)}</p>"
+            )
+        parts.append("</div>")
+
+    # 5. Sign-off block
+    parts.append(
+        "<div class='signoff'><h2>Review and Sign-off</h2><table>"
+        "<tr><td style='width:34%'></td><td style='width:22%'></td>"
+        "<td style='width:22%'></td><td style='width:22%'></td></tr>"
+        "<tr><td class='cap'>Reviewer name</td><td class='cap'>Credential</td>"
+        "<td class='cap'>Date</td><td class='cap'>Signature</td></tr>"
+        "<tr><td></td><td></td><td></td><td></td></tr>"
+        "<tr><td class='cap'>Program director</td><td class='cap'>Credential</td>"
+        "<td class='cap'>Date</td><td class='cap'>Signature</td></tr>"
+        "</table></div>",
+    )
+    parts.append("</body></html>")
+    return "".join(parts)
+
+```
+
+```text
+File created successfully at: /Users/johnzhang/Documents/GitHub/document_verification/engine/packet.py (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:02Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/main.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:05Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/main.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:18Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:21Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:23Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:25Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:32Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:36Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:39Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/static/index.html has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:47:45Z)**_
+
+Restart and test `/packet` with the PDF run's real findings.
+
+_**Agent (claude-fable-5 2026-08-01 21:48:15Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Generate packet from real findings, verify contents
+
+```bash
+lsof -ti :8000 | xargs kill 2>/dev/null; sleep 0.5
+uv run uvicorn main:app --port 8000 > /tmp/redline_server.log 2>&1 &
+sleep 2
+python3 -c "
+import json
+findings = list(json.load(open('/tmp/pdf_run1.json')).values())
+docs = json.load(open('/tmp/pdf_audit_req.json'))['documents']
+json.dump({'rulebook_id':'cms_psych','documents':docs,'findings':findings,
+           'counts':{'pass':10,'fail':3,'unclear':1},'elapsed_s':15.6},
+          open('/tmp/packet_req.json','w'))
+"
+time curl -s -X POST localhost:8000/packet -H 'Content-Type: application/json' -d @/tmp/packet_req.json -o /tmp/packet.html -w "HTTP %{http_code}, %{size_download} bytes\n"
+python3 -c "
+h = open('/tmp/packet.html').read()
+checks = {
+  'title': 'Corrective Action Report' in h,
+  'verbatim c1 reg text': 'individual comprehensive treatment plan that must be based on an inventory' in h,
+  'verbatim d reg text': 'at least weekly for the first 2 months' in h,
+  'DRAFT label x3': h.count('DRAFT — for clinician review and signature') == 3,
+  'sign-off block': 'Program director' in h and 'Signature' in h,
+  'counts from done': '10 pass / 3 fail / 1 unclear' in h,
+  'eCFR url': 'ecfr.gov' in h,
+}
+for k, v in checks.items(): print(('OK ' if v else 'FAIL ') + k)
+# show a slice of one draft
+import re
+i = h.find('Remediates §482.61(c)(1)<')
+print('\ndraft excerpt:', re.sub('<[^>]+>', ' ', h[i:i+600])[:400])
+"
+```
+
+```text
+HTTP 200, 22365 bytes
+curl -s -X POST localhost:8000/packet -H 'Content-Type: application/json' -d   0.00s user 0.00s system 0% cpu 16.718 total
+OK title
+OK verbatim c1 reg text
+OK verbatim d reg text
+OK DRAFT label x3
+OK sign-off block
+OK counts from done
+OK eCFR url
+
+draft excerpt: Remediates §482.61(c)(1)  ADDENDUM TO INDIVIDUALIZED PLAN OF CARE — INVENTORY OF PATIENT STRENGTHS AND DISABILITIES (basis of treatment plan)  STRENGTHS / ASSETS
+1. Motivation and treatment engagement: Voluntary admission with consent to treatment signed at registration; presented at the urging of his wife and outpatient counselor. Stated on admission he is &quot;nervous but glad to be here.&quot;
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:48:25Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/johnzhang/Documents/GitHub/document_verification/engine/packet.py has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:49:04Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Browser test: upload fixture PDF via UI
+
+```bash
+lsof -ti :8000 | xargs kill 2>/dev/null; sleep 0.5
+uv run uvicorn main:app --port 8000 > /tmp/redline_server.log 2>&1 &
+sleep 2
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+$B goto http://localhost:8000
+$B upload "#pdf-input" corpus/sample_export.pdf
+sleep 25
+$B js "'docs: ' + document.querySelectorAll('.doc').length + ' | chips: ' + document.querySelectorAll('.prov-chip').length + ' | toggle visible: ' + !document.getElementById('source-toggle').hidden + ' | toggle label: ' + document.querySelector('[data-source=upload]').textContent"
+$B console --errors
+```
+
+```text
+Navigated to http://localhost:8000 (200)
+Uploaded: sample_export.pdf (219600B)
+docs: 6 | chips: 0 | toggle visible: false | toggle label: 
+--- BEGIN UNTRUSTED EXTERNAL CONTENT (source: http://localhost:8000/) ---
+(no console errors)
+--- END UNTRUSTED EXTERNAL CONTENT ---
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:49:31Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check upload state after longer wait
+
+```bash
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+$B js "'upload btn: ' + document.getElementById('upload-btn').textContent + ' | banner: ' + document.getElementById('banner-slot').innerText"
+sleep 15
+$B js "'docs: ' + document.querySelectorAll('.doc').length + ' | chips: ' + document.querySelectorAll('.prov-chip').length + ' | toggle: ' + !document.getElementById('source-toggle').hidden + ' | first doc: ' + (document.querySelector('.doc-title')||{}).textContent"
+```
+
+```text
+upload btn: Extracting… | banner: 
+docs: 6 | chips: 6 | toggle: true | first doc: Initial Psychiatric Assessmentfrom PDF: sample_export.pdf
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:49:41Z)**_
+
+Extraction completed — chips and toggle present. Now the full judge loop in the browser.
+
+_**Agent (claude-fable-5 2026-08-01 21:50:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run audit on uploaded docs in browser
+
+```bash
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+$B click "#run" && sleep 22
+$B js "'counts: ' + document.querySelector('.stats').innerText.replace(/\n/g,' ') + ' | download enabled: ' + !document.getElementById('download-report').disabled"
+```
+
+```text
+Clicked #run → now at http://localhost:8000/
+counts: 14 rules 10 pass 3 fail 1 unclear 16.7s | download enabled: true
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:50:38Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Delete legal-status line in UI, re-run, check flip
+
+```bash
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+# Judge move: delete the legal-status line from the extracted intake text, re-run
+$B js "
+const ta = document.querySelector('.doc textarea');
+const before = ta.value.length;
+ta.value = ta.value.replace(/Legal Status: Voluntary admission; consent to treatment signed by the patient at registration\.\s*/, '');
+'removed chars: ' + (before - ta.value.length)"
+$B click "#run" && sleep 22
+$B js "const f = [...document.querySelectorAll('.finding')].find(el => el.querySelector('.rid').textContent.includes('(a)(1)')); '(a)(1) now: ' + f.className.match(/v-(\w+)/)[1] + ' | counts: ' + document.querySelector('.stats').innerText.replace(/\n/g,' ')"
+```
+
+```text
+removed chars: 96
+Clicked #run → now at http://localhost:8000/
+(a)(1) now: unclear | counts: 14 rules 9 pass 3 fail 2 unclear 13.7s
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:50:44Z)**_
+
+The live-mangle loop works on PDF-extracted text — (a)(1) flipped green → amber. Now the download button and print rendering.
+
+_**Agent (claude-fable-5 2026-08-01 21:51:35Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Test download button and packet print rendering
+
+```bash
+B="$HOME/.claude/skills/gstack/browse/dist/browse"
+$B click "#download-report"
+sleep 3
+$B js "'btn during: ' + document.getElementById('download-report').textContent"
+sleep 22
+$B js "'btn after: ' + document.getElementById('download-report').textContent + ' | banner: ' + (document.getElementById('banner-slot').innerText || '(none)')"
+# print-rendering check of the curl-generated packet (with the <br> fix, regenerate first)
+curl -s -X POST localhost:8000/packet -H 'Content-Type: application/json' -d @/tmp/packet_req.json -o /tmp/packet.html
+$B goto file:///tmp/packet.html && $B pdf /tmp/packet_print.pdf --format letter --print-background
+uv run python -c "
+from pypdf import PdfReader
+r = PdfReader('/tmp/packet_print.pdf')
+print('packet prints to', len(r.pages), 'pages')
+t = r.pages[0].extract_text()
+print('page 1 header ok:', 'Corrective Action Report' in t)
+"
+$B screenshot /tmp/packet_view.png
+```
+
+```text
+Clicked #download-report → now at http://localhost:8000/
+btn during: Drafting…
+btn after: Download report | banner: (none)
+Navigated to file:///tmp/packet.html (200)
+PDF saved: /tmp/packet_print.pdf
+packet prints to 13 pages
+page 1 header ok: True
+Screenshot saved: /tmp/packet_view.png
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:51:40Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `/tmp/packet_view.png`
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:51:51Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #5 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:51:51Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="TaskUpdate"><details>
+<summary>Tool use: **TaskUpdate**</summary>
+
+```text
+Updated task #7 status
+```
+</details></tool-use>
+
+_**Agent (claude-fable-5 2026-08-01 21:52:07Z)**_
+
+Both features are built, live-verified, and running at http://localhost:8000.
+
+**PDF intake** (`POST /intake/pdf` + UI):
+- `engine/intake.py` extracts the text layer with pypdf (scanned PDFs get the clean "OCR is out of scope" 422, shown as a dismissible banner), then one structured LLM call segments it into documents with a hard verbatim-preservation instruction. Any structuring failure degrades to a single "Unstructured chart export" document — never a dead pane.
+- The left pane got an Upload PDF button, per-document "from PDF: filename" chips, extraction-confidence notes, and a Committed corpus ↔ From upload toggle. Zero changes inside `engine/` — the audit consumes the same `DocumentIn` list either way.
+- **Fixture results**: `corpus/sample_export.pdf` (6-page "Lakeshore Behavioral Health" export — different headings, header/footer chrome, same four planted gaps) extracts into 6 correctly-dated documents with verbatim fidelity confirmed by substring probes, and audits to **exactly 10/3/1 with the same four gaps** — twice, identically. The full judge loop works on extracted text: deleting the legal-status line in the browser flipped (a)(1) on re-run.
+- One deviation to know about: the **broken variant flips (a)(1) green → amber, not red** — stable across 3 runs, and on inspection it's the *correct* call: the narrative still says the patient "presented voluntarily," which hints at status without being the required identification-data statement. It's documented in `scripts/make_fixture_pdfs.py`; the amber-with-explanation is arguably a better demo beat than a red.
+
+**Corrective-action packet** (`POST /packet` + Download report button):
+- For each fail, `engine/packet.py` drafts the missing documentation grounded in the actual chart (the strengths draft quotes "nervous but glad to be here" straight from the fixture), each boxed under the required DRAFT-for-clinician-review label, with per-draft fallback to a static requirements list. ~17s to generate three drafts.
+- The HTML is standalone and print-ready: verified header pulls the audit's own counts/elapsed, verbatim §482.61 text appears for every flagged rule, sign-off lines close it, and it prints cleanly (rendered to a 13-page PDF via headless Chromium as a check).
+
+Also added: fixture generator at `scripts/make_fixture_pdfs.py` (HTML → PDF via the browse daemon, no new Python deps beyond `pypdf`/`python-multipart`). Still nothing committed to git across the whole project — happy to make commits if you want checkpoints before the demo.

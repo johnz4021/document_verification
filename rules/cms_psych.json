@@ -8,7 +8,7 @@
     {
       "rule_id": "482.61(a)(1)",
       "requirement_verbatim": "The identification data must include the patient's legal status.",
-      "evidence_required": "An explicit statement of the patient's legal admission status (e.g., voluntary, involuntary, court-committed) in the chart's identification or admission data.",
+      "evidence_required": "An explicit statement of the patient's legal admission status (e.g., voluntary, involuntary, court-committed) in the chart's identification or admission data. If no legal status is stated anywhere in the identification/admission data, that is a fail, not unclear — the requirement is unambiguous that it must be included.",
       "rule_type": "semantic",
       "scope_docs": ["bps_intake"]
     },

@@ -9,4 +9,6 @@ dependencies = [
     "anthropic>=0.100",
     "pydantic>=2.9",
     "python-dotenv>=1.0",
+    "pypdf>=5.0",
+    "python-multipart>=0.0.9",
 ]

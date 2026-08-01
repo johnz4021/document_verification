@@ -19,14 +19,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import StreamingResponse  # noqa: E402
+from fastapi import FastAPI, HTTPException, UploadFile  # noqa: E402
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from engine import intake, packet  # noqa: E402
 from engine.evaluate import run_audit  # noqa: E402
 from engine.llm import AnthropicLLM  # noqa: E402
-from engine.schemas import DocumentIn, Rulebook  # noqa: E402
+from engine.schemas import DocumentIn, Finding, Rulebook  # noqa: E402
 
 ROOT = Path(__file__).parent
 
@@ -114,6 +115,66 @@ async def audit(request: AuditRequest) -> StreamingResponse:
         stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/intake/pdf")
+async def intake_pdf(file: UploadFile) -> JSONResponse:
+    """Extract a chart PDF into editable DocumentIn records. Does NOT run the
+    audit — the user reviews the extraction in the left pane first."""
+    pdf_bytes = await file.read()
+    try:
+        raw_text = intake.extract_text(pdf_bytes)
+    except (intake.ScannedPdfError, ValueError) as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    chart = await intake.structure_chart(raw_text, llm)
+    documents, notes = [], []
+    for i, doc in enumerate(chart.documents):
+        doc_id = intake.slugify_doc_id(doc.doc_type, i)
+        documents.append(
+            _flatten(
+                {
+                    "doc_id": doc_id,
+                    "doc_type": doc.doc_type,
+                    "date": doc.date,
+                    "sections": [s.model_dump() for s in doc.sections],
+                }
+            )
+        )
+        notes.append({"doc_id": doc_id, "note": doc.extraction_note})
+    return JSONResponse(
+        content={
+            "filename": file.filename,
+            "documents": [d.model_dump() for d in documents],
+            "notes": notes,
+        }
+    )
+
+
+class PacketRequest(BaseModel):
+    rulebook_id: str
+    documents: list[DocumentIn]
+    findings: list[Finding]
+    counts: dict[str, int]
+    elapsed_s: float
+
+
+@app.post("/packet")
+async def make_packet(request: PacketRequest) -> HTMLResponse:
+    rulebook = RULEBOOKS.get(request.rulebook_id)
+    if rulebook is None:
+        raise HTTPException(404, f"Unknown rulebook {request.rulebook_id!r}")
+    fails = [f for f in request.findings if f.verdict == "fail"]
+    drafts = await packet.draft_fixes(fails, request.documents, llm)
+    html_doc = packet.render_packet(
+        rulebook, request.findings, request.counts, request.elapsed_s, drafts
+    )
+    return HTMLResponse(
+        content=html_doc,
+        headers={
+            "Content-Disposition": 'attachment; filename="corrective_action_report.html"'
+        },
     )
 
 
