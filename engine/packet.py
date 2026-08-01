@@ -131,6 +131,16 @@ def _chip(verdict: str) -> str:
     return f'<span class="chip" style="color:{_CHIP_COLORS[verdict]}">{verdict}</span>'
 
 
+_PROV_BADGES = {
+    "user": '<span class="chip" style="color:#1d4ed8"> · USER RULE</span>',
+    "modified": '<span class="chip" style="color:#b45309"> · MODIFIED — NOT VERBATIM REGULATION</span>',
+}
+
+
+def _prov_badge(finding: Finding) -> str:
+    return _PROV_BADGES.get(finding.provenance, "")
+
+
 def _status_line(f: Finding) -> str:
     first = f.rationale.split(". ")[0].rstrip(".")
     return first + "."
@@ -168,7 +178,7 @@ def render_packet(
     parts.append("<tr><th>Rule</th><th>Verdict</th><th>Status</th></tr>")
     for f in findings:
         parts.append(
-            f"<tr><td style='white-space:nowrap'>§{_e(f.rule_id)}</td>"
+            f"<tr><td style='white-space:nowrap'>§{_e(f.rule_id)}{_prov_badge(f)}</td>"
             f"<td>{_chip(f.verdict)}</td><td>{_e(_status_line(f))}</td></tr>"
         )
     parts.append("</table>")
@@ -179,9 +189,21 @@ def render_packet(
         parts.append("<p>No failed or unclear findings — no corrective action required.</p>")
     for f in flagged:
         parts.append("<div class='finding'>")
-        parts.append(f"<h3>§{_e(f.rule_id)} — {_chip(f.verdict)}</h3>")
-        parts.append("<div class='label'>The regulation requires (verbatim)</div>")
-        parts.append(f"<blockquote class='reg'>{_e(f.requirement_verbatim)}</blockquote>")
+        parts.append(f"<h3>§{_e(f.rule_id)} — {_chip(f.verdict)}{_prov_badge(f)}</h3>")
+        if f.provenance == "committed":
+            parts.append("<div class='label'>The regulation requires (verbatim)</div>")
+            parts.append(f"<blockquote class='reg'>{_e(f.requirement_verbatim)}</blockquote>")
+        else:
+            label = (
+                "The rule requires (user-defined this session)"
+                if f.provenance == "user"
+                else "The rule requires (modified this session — no longer verbatim regulation)"
+            )
+            parts.append(f"<div class='label'>{label}</div>")
+            parts.append(
+                f"<blockquote class='reg' style='font-style:normal;border-left-color:#a8a29e'>"
+                f"{_e(f.requirement_verbatim)}</blockquote>"
+            )
         parts.append("<div class='label'>Audit finding</div>")
         parts.append(f"<p>{_e(f.rationale)}</p>")
         parts.append("<div class='label'>Evidence status</div>")

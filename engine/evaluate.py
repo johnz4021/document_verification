@@ -77,7 +77,11 @@ async def evaluate_rule(
     finding so a single bad call mid-demo costs one amber row, not the run."""
     scoped = [d for d in documents if d.doc_id in rule.scope_docs] or documents
     docs_by_id = {d.doc_id: d for d in documents}
-    meta = {"source": rulebook.source, "source_url": rulebook.source_url}
+    meta = {
+        "source": rulebook.source,
+        "source_url": rulebook.source_url,
+        "provenance": rule.provenance,
+    }
 
     try:
         if rule.rule_type == "computed":

@@ -163,6 +163,54 @@
     font-family: var(--mono); font-size: 12px; color: var(--red);
   }
 
+  /* ---------- rule authoring & inspector ---------- */
+  #add-rule-btn {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 10px; border: 1px solid var(--ink); background: var(--card);
+    color: var(--ink); cursor: pointer;
+  }
+  #add-rule-btn:hover { background: var(--ink); color: var(--card); }
+  .prov-badge {
+    font-family: var(--mono); font-size: 9px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .prov-badge.user { color: #1d4ed8; background: #e5edff; }
+  .prov-badge.modified { color: var(--amber); background: var(--amber-soft); }
+  .finding.rule-disabled { opacity: .45; border-left-color: var(--ink-faint); }
+  .finding.rule-disabled .chip { color: var(--ink-soft); background: var(--paper); }
+  .ctl-block { border-top: 1px solid var(--hairline); margin-top: 18px; padding-top: 12px; }
+  .ctl-block textarea, .ctl-block input[type=text] {
+    width: 100%; font-family: var(--sans); font-size: 12px; line-height: 1.5;
+    border: 1px solid var(--hairline); background: var(--card); color: var(--ink);
+    padding: 8px; resize: vertical;
+  }
+  .ctl-block textarea:focus, .ctl-block input[type=text]:focus { outline: 1px solid var(--ink); }
+  .ctl-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .btn-sm {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 5px 12px; border: 1px solid var(--ink); background: var(--card);
+    color: var(--ink); cursor: pointer;
+  }
+  .btn-sm:hover:not(:disabled) { background: var(--ink); color: var(--card); }
+  .btn-sm.primary { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn-sm.primary:hover:not(:disabled) { background: #a30d26; }
+  .btn-sm:disabled { opacity: .45; cursor: wait; }
+  .toggle-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-soft); }
+  .diff-box { border: 1px solid var(--hairline); padding: 8px 10px; margin-top: 6px;
+              font-size: 12px; line-height: 1.5; }
+  .diff-box.old { background: var(--red-soft); text-decoration: line-through;
+                  text-decoration-color: rgba(200,16,46,.4); color: var(--ink-soft); }
+  .diff-box.new { background: var(--green-soft); }
+  .refusal-card {
+    border: 1.5px solid var(--amber); background: var(--amber-soft);
+    padding: 12px 14px; font-size: 13px; line-height: 1.55;
+  }
+  .refusal-card b { font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+                    text-transform: uppercase; color: var(--amber); display: block; margin-bottom: 6px; }
+
   /* ---------- findings (middle) ---------- */
   .finding {
     display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
@@ -265,7 +313,9 @@
     <div id="docs"></div>
   </section>
   <section class="pane">
-    <div class="pane-label">Findings</div>
+    <div class="pane-label">Findings
+      <button id="add-rule-btn" type="button">+ Add rule</button>
+    </div>
     <div id="findings"><div class="empty">Run the audit to stream findings here.</div></div>
   </section>
   <section class="pane">
@@ -284,6 +334,9 @@ let lastRun = null;     // {rulebook_id, documents, findings, counts, elapsed_s}
 let selectedEl = null;
 let timerHandle = null;
 let corpusDocs = [];
+let workingRules = [];    // the session's editable rulebook (client-owned)
+let pristineRules = {};   // rule_id -> committed copy, for client-side provenance display
+let disabledIds = new Set();
 let uploadedDocs = null;
 let uploadedNotes = {};
 let uploadedFilename = '';
@@ -300,10 +353,35 @@ async function init() {
 
 async function loadCorpus(rulebookId) {
   corpusDocs = await (await fetch(`/corpus/${rulebookId}`)).json();
+  const rbFull = await (await fetch(`/rulebook/${rulebookId}`)).json();
+  workingRules = rbFull.rules;
+  pristineRules = Object.fromEntries(rbFull.rules.map(r => [r.rule_id, JSON.parse(JSON.stringify(r))]));
+  disabledIds = new Set();
   if (currentSource === 'corpus') renderDocs(corpusDocs);
   resetResults();
-  const rb = rulebooks.find(r => r.rulebook_id === rulebookId);
-  $('counter').innerHTML = `<b>${rb.rule_count}</b> rules`;
+  updateCounter();
+}
+
+function activeRules() {
+  return workingRules.filter(r => !disabledIds.has(r.rule_id));
+}
+
+function clientProv(rule) {
+  const p = pristineRules[rule.rule_id];
+  if (!p) return 'user';
+  const keys = ['requirement_verbatim', 'evidence_required', 'rule_type', 'handler', 'scope_docs'];
+  const same = keys.every(k => JSON.stringify(p[k] ?? null) === JSON.stringify(rule[k] ?? null));
+  return same ? 'committed' : 'modified';
+}
+
+function updateCounter() {
+  const off = disabledIds.size;
+  $('counter').innerHTML = `<b>${activeRules().length}</b> rules` +
+    (off ? ` <span style="color:var(--ink-faint)">· ${off} off</span>` : '');
+}
+
+function setCounts(c) {
+  for (const k of ['pass', 'fail', 'unclear']) $('n-' + k).textContent = c[k] || 0;
 }
 
 function renderDocs(docs, fromUpload = false) {
@@ -422,7 +500,7 @@ async function runAudit() {
     const res = await fetch('/audit', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({rulebook_id: $('rulebook').value, documents}),
+      body: JSON.stringify({rulebook_id: $('rulebook').value, documents, rules: activeRules()}),
     });
     if (!res.ok) throw new Error(`audit failed: HTTP ${res.status}`);
     const reader = res.body.getReader();
@@ -455,6 +533,7 @@ async function runAudit() {
             elapsed_s: d.elapsed_s,
           };
           $('download-report').disabled = false;
+          renderDisabledRows();
         }
       }
     }
@@ -467,15 +546,63 @@ async function runAudit() {
   }
 }
 
-function appendFinding(f) {
+function buildFindingRow(f) {
   const el = document.createElement('div');
   el.className = `finding v-${f.verdict}`;
+  if (disabledIds.has(f.rule_id)) el.classList.add('rule-disabled');
+  el.dataset.ruleId = f.rule_id;
+  const prov = (f.provenance && f.provenance !== 'committed')
+    ? ` <span class="prov-badge ${f.provenance}">${f.provenance === 'user' ? 'user' : 'mod'}</span>` : '';
+  const prefix = f.provenance === 'user' ? '' : '§';
   el.innerHTML = `
     <span class="chip">${f.verdict}</span>
-    <span class="rid">§${esc(f.rule_id)}</span>
+    <span class="rid">${prefix}${esc(f.rule_id)}${prov}</span>
     <span class="req">${esc(f.requirement_verbatim)}</span>`;
   el.onclick = () => { select(el); renderDetail(f); };
-  $('findings').appendChild(el);
+  return el;
+}
+
+function appendFinding(f) {
+  $('findings').appendChild(buildFindingRow(f));
+}
+
+function upsertFinding(f) {
+  if (!lastRun) {
+    lastRun = {rulebook_id: $('rulebook').value, documents: collectDocs(),
+               findings: [], counts: {pass: 0, fail: 0, unclear: 0}, elapsed_s: 0};
+  }
+  const i = lastRun.findings.findIndex(x => x.rule_id === f.rule_id);
+  if (i >= 0) lastRun.findings[i] = f; else lastRun.findings.push(f);
+  const counts = {pass: 0, fail: 0, unclear: 0};
+  for (const x of lastRun.findings) counts[x.verdict]++;
+  lastRun.counts = counts;
+  setCounts(counts);
+  const el = buildFindingRow(f);
+  const existing = document.querySelector(`.finding[data-rule-id="${CSS.escape(f.rule_id)}"]`);
+  if (existing) existing.replaceWith(el);
+  else {
+    const empty = $('findings').querySelector('.empty');
+    if (empty) empty.remove();
+    $('findings').appendChild(el);
+  }
+  select(el);
+  renderDetail(f);
+  $('download-report').disabled = false;
+}
+
+function pseudoFinding(rule) {
+  return {rule_id: rule.rule_id, requirement_verbatim: rule.requirement_verbatim,
+          source: '', source_url: '', verdict: 'off', evidence: null, doc_id: null,
+          char_start: null, char_end: null, rationale: '', confidence: 'low',
+          mode: rule.rule_type, provenance: clientProv(rule)};
+}
+
+function renderDisabledRows() {
+  for (const rule of workingRules) {
+    if (!disabledIds.has(rule.rule_id)) continue;
+    if (document.querySelector(`.finding[data-rule-id="${CSS.escape(rule.rule_id)}"]`)) continue;
+    $('findings').appendChild(buildFindingRow(pseudoFinding(rule)));
+  }
 }
 
 function select(el) {
@@ -485,17 +612,39 @@ function select(el) {
 }
 
 function renderDetail(f) {
-  let html = `
+  const rule = workingRules.find(r => r.rule_id === f.rule_id);
+  const prov = rule ? clientProv(rule) : (f.provenance || 'committed');
+  const isOff = disabledIds.has(f.rule_id);
+  const hasVerdict = ['pass', 'fail', 'unclear'].includes(f.verdict);
+  const badge = prov === 'user' ? '<span class="prov-badge user">user rule</span>'
+    : prov === 'modified' ? '<span class="prov-badge modified">modified — not verbatim</span>' : '';
+  const regLabel = prov === 'committed' ? 'The regulation says'
+    : prov === 'user' ? 'The rule says (user-defined this session)'
+    : 'The rule says (modified this session)';
+  const regStyle = prov === 'committed' ? '' : ' style="font-style:normal;border-left-color:var(--ink-faint)"';
+  const ridLine = prov === 'committed' ? `${esc(f.source)} — ${esc(f.rule_id)}` : esc(f.rule_id);
+
+  let html = '';
+  if (hasVerdict) {
+    html += `
     <div class="verdict-line">
       <span class="verdict-word ${f.verdict}">${f.verdict}</span>
+      ${badge}
       <span class="conf">${f.mode === 'computed' ? 'deterministic — no model' : 'confidence: ' + esc(f.confidence)}</span>
-    </div>
-    <div class="block-label">The regulation says</div>
-    <div class="reg-quote"><span class="rid-inline">${esc(f.source)} — ${esc(f.rule_id)}</span>${esc(f.requirement_verbatim)}</div>
+    </div>`;
+  } else if (badge) {
+    html += `<div class="verdict-line">${badge}</div>`;
+  }
+  html += `
+    <div class="block-label">${regLabel}</div>
+    <div class="reg-quote"${regStyle}><span class="rid-inline">${ridLine}</span>${esc(f.requirement_verbatim)}</div>`;
+  if (hasVerdict) {
+    html += `
     <div class="block-label">Finding</div>
     <div class="rationale">${esc(f.rationale)}</div>`;
+  }
 
-  if (f.evidence && f.doc_id && lastRunDocs[f.doc_id]) {
+  if (hasVerdict && f.evidence && f.doc_id && lastRunDocs[f.doc_id]) {
     const doc = lastRunDocs[f.doc_id];
     let body;
     if (f.char_start != null && f.char_end != null) {
@@ -509,15 +658,179 @@ function renderDetail(f) {
       <div class="block-label">Verified span — ${esc(doc.doc_type)}</div>
       <div class="source-excerpt" id="excerpt">${body}</div>`;
   }
-  if (f.source_url) {
+  if (f.source_url && prov === 'committed') {
     html += `<a class="ecfr" href="${esc(f.source_url)}" target="_blank" rel="noopener">verify the source text yourself ↗</a>`;
   }
+
+  if (rule) {
+    html += `
+    <div class="ctl-block">
+      <div class="toggle-row">
+        <input type="checkbox" id="rule-disable"${isOff ? ' checked' : ''}>
+        <label for="rule-disable">Exclude this rule from runs${isOff ? ' (currently off)' : ''}</label>
+      </div>
+      <div class="block-label" style="margin-top:14px">Evaluation criteria (what evidence satisfies this rule)</div>
+      <textarea id="ev-edit" rows="6">${esc(rule.evidence_required)}</textarea>
+      <div class="block-label">Refine in plain English</div>
+      <input type="text" id="refine-input" placeholder="e.g. also accept family-reported strengths">
+      <div id="refine-result"></div>
+      <div class="ctl-row">
+        <button class="btn-sm" id="refine-btn" type="button">Refine</button>
+        <button class="btn-sm primary" id="rerun-btn" type="button"${isOff ? ' disabled' : ''}>Re-run this rule</button>
+      </div>
+    </div>`;
+  }
+
   $('detail').innerHTML = html;
   // Scroll only the excerpt box — scrollIntoView would also scroll the pane
   // and clip the verdict line at the top.
   const excerpt = $('detail').querySelector('#excerpt');
   const mark = excerpt && excerpt.querySelector('mark');
   if (mark) excerpt.scrollTop = Math.max(0, mark.offsetTop - excerpt.clientHeight / 2);
+
+  if (rule) {
+    $('rule-disable').onchange = () => toggleRule(f.rule_id, f);
+    $('ev-edit').onchange = () => { rule.evidence_required = $('ev-edit').value; };
+    $('refine-btn').onclick = () => refineRule(rule);
+    $('rerun-btn').onclick = () => {
+      rule.evidence_required = $('ev-edit').value;
+      runSingleRule(f.rule_id);
+    };
+  }
+}
+
+function toggleRule(ruleId, f) {
+  if (disabledIds.has(ruleId)) disabledIds.delete(ruleId);
+  else disabledIds.add(ruleId);
+  updateCounter();
+  const row = document.querySelector(`.finding[data-rule-id="${CSS.escape(ruleId)}"]`);
+  if (row) row.classList.toggle('rule-disabled', disabledIds.has(ruleId));
+  if (f) renderDetail(f);
+}
+
+async function runSingleRule(ruleId) {
+  const documents = collectDocs();
+  documents.forEach(d => { lastRunDocs[d.doc_id] = d; });
+  if (lastRun) lastRun.documents = documents;
+  try {
+    const res = await fetch('/audit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({rulebook_id: $('rulebook').value, documents,
+                            rules: activeRules(), rule_ids: [ruleId]}),
+    });
+    if (!res.ok) throw new Error(`audit failed: HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream: true});
+      let sep;
+      while ((sep = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, sep); buf = buf.slice(sep + 2);
+        const event = (chunk.match(/^event: (.*)$/m) || [])[1];
+        const data = (chunk.match(/^data: (.*)$/m) || [])[1];
+        if (event === 'finding' && data) upsertFinding(JSON.parse(data));
+      }
+    }
+  } catch (err) {
+    showBanner(String(err.message || err));
+  }
+}
+
+async function refineRule(rule) {
+  const instruction = $('refine-input').value.trim();
+  if (!instruction) return;
+  const btn = $('refine-btn');
+  btn.disabled = true; btn.textContent = 'Compiling…';
+  try {
+    const res = await fetch('/rules/compile', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({instruction, current_rule: rule}),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || `compile failed: HTTP ${res.status}`);
+    if (!body.checkable) {
+      $('refine-result').innerHTML =
+        `<div class="refusal-card" style="margin-top:10px"><b>Not checkable</b>${esc(body.refusal_reason)}</div>`;
+      return;
+    }
+    $('refine-result').innerHTML = `
+      <div class="block-label">Before</div>
+      <div class="diff-box old">${esc(rule.evidence_required)}</div>
+      <div class="block-label">After</div>
+      <div class="diff-box new">${esc(body.rule.evidence_required)}</div>
+      <div class="ctl-row"><button class="btn-sm primary" id="apply-refine" type="button">Apply &amp; re-run</button></div>`;
+    $('apply-refine').onclick = () => {
+      rule.evidence_required = body.rule.evidence_required;
+      if (body.rule.requirement_verbatim) rule.requirement_verbatim = body.rule.requirement_verbatim;
+      runSingleRule(rule.rule_id);
+    };
+  } catch (err) {
+    showBanner(String(err.message || err));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Refine';
+  }
+}
+
+function showAuthoringCard() {
+  if (selectedEl) { selectedEl.classList.remove('selected'); selectedEl = null; }
+  $('detail').innerHTML = `
+    <div class="ctl-block" style="border-top:0;margin-top:0;padding-top:0">
+      <div class="block-label" style="margin-top:0">New rule — write it in plain English</div>
+      <textarea id="author-input" rows="3" placeholder="e.g. Every progress note must mention whether the patient is adhering to prescribed medications"></textarea>
+      <div class="ctl-row"><button class="btn-sm primary" id="compile-btn" type="button">Compile</button></div>
+      <div id="compile-result"></div>
+    </div>`;
+  $('compile-btn').onclick = compileNewRule;
+}
+
+async function compileNewRule() {
+  const instruction = $('author-input').value.trim();
+  if (!instruction) return;
+  const btn = $('compile-btn');
+  btn.disabled = true; btn.textContent = 'Compiling…';
+  try {
+    const res = await fetch('/rules/compile', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({instruction}),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || `compile failed: HTTP ${res.status}`);
+    if (!body.checkable) {
+      $('compile-result').innerHTML =
+        `<div class="refusal-card" style="margin-top:12px"><b>Not checkable against documentation</b>${esc(body.refusal_reason)}</div>`;
+      return;
+    }
+    const rule = body.rule;
+    $('compile-result').innerHTML = `
+      <div class="verdict-line" style="margin-top:16px">
+        <span class="prov-badge user">user rule</span>
+        <span class="conf">${esc(rule.rule_id)}</span>
+      </div>
+      <div class="block-label">Requirement (as written)</div>
+      <div class="reg-quote" style="font-style:normal;border-left-color:var(--ink-faint)">${esc(rule.requirement_verbatim)}</div>
+      <div class="block-label">Evaluation criteria — edit before adding if you like</div>
+      <textarea id="new-ev" rows="7">${esc(rule.evidence_required)}</textarea>
+      <div class="block-label">Scope</div>
+      <div style="font-size:12px;color:var(--ink-soft)">All documents · evaluated semantically · held to the same
+      verbatim-evidence verification as every committed rule</div>
+      <div class="ctl-row"><button class="btn-sm primary" id="add-run-btn" type="button">Add &amp; run</button></div>`;
+    $('add-run-btn').onclick = () => {
+      rule.evidence_required = $('new-ev').value;
+      workingRules.push(rule);
+      updateCounter();
+      runSingleRule(rule.rule_id);
+    };
+  } catch (err) {
+    showBanner(String(err.message || err));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Compile';
+  }
 }
 
 async function downloadReport() {
@@ -548,6 +861,7 @@ async function downloadReport() {
 
 $('run').onclick = runAudit;
 $('download-report').onclick = downloadReport;
+$('add-rule-btn').onclick = showAuthoringCard;
 init();
 </script>
 </body>

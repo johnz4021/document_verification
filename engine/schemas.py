@@ -16,6 +16,12 @@ Verdict = Literal["pass", "fail", "unclear"]
 Confidence = Literal["high", "medium", "low"]
 RuleType = Literal["semantic", "computed"]
 
+# committed: byte-identical to the pristine rulebook on disk.
+# modified: same rule_id as a committed rule, but the judge changed something.
+# user: authored this session. Computed server-side by diff — never asserted
+# by the client — so an edited rule can't wear verbatim-citation styling.
+Provenance = Literal["committed", "modified", "user"]
+
 
 class Rule(BaseModel):
     rule_id: str
@@ -24,6 +30,7 @@ class Rule(BaseModel):
     rule_type: RuleType
     handler: str | None = None
     scope_docs: list[str]
+    provenance: Provenance = "committed"
 
 
 class Rulebook(BaseModel):
@@ -82,3 +89,4 @@ class Finding(BaseModel):
     rationale: str
     confidence: Confidence
     mode: RuleType
+    provenance: Provenance = "committed"

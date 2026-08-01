@@ -24,10 +24,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse  # n
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from engine import intake, packet  # noqa: E402
+from engine import authoring, intake, packet  # noqa: E402
 from engine.evaluate import run_audit  # noqa: E402
 from engine.llm import AnthropicLLM  # noqa: E402
-from engine.schemas import DocumentIn, Finding, Rulebook  # noqa: E402
+from engine.schemas import DocumentIn, Finding, Rule, Rulebook  # noqa: E402
 
 ROOT = Path(__file__).parent
 
@@ -72,6 +72,37 @@ CORPORA: dict[str, list[DocumentIn]] = {
 class AuditRequest(BaseModel):
     rulebook_id: str
     documents: list[DocumentIn]
+    # Optional session working rulebook (judge-added/edited/disabled rules) and
+    # an id filter for single-rule re-runs. Omitted -> the committed rulebook.
+    rules: list[Rule] | None = None
+    rule_ids: list[str] | None = None
+
+
+def _effective_rulebook(base: Rulebook, request: AuditRequest) -> Rulebook:
+    """Apply the request's rule overrides and stamp computed provenance.
+
+    Provenance is derived by diffing each incoming rule against the pristine
+    committed copy — the client can never assert it. An edited committed rule
+    becomes `modified`; an unknown rule_id is `user` (and loses any claim to a
+    regulatory source).
+    """
+    pristine = {r.rule_id: r for r in base.rules}
+    effective = []
+    for rule in request.rules if request.rules is not None else base.rules:
+        committed = pristine.get(rule.rule_id)
+        if committed is None:
+            provenance = "user"
+        elif committed.model_dump(exclude={"provenance"}) == rule.model_dump(
+            exclude={"provenance"}
+        ):
+            provenance = "committed"
+        else:
+            provenance = "modified"
+        effective.append(rule.model_copy(update={"provenance": provenance}))
+    if request.rule_ids is not None:
+        wanted = set(request.rule_ids)
+        effective = [r for r in effective if r.rule_id in wanted]
+    return base.model_copy(update={"rules": effective})
 
 
 @app.get("/rulebooks")
@@ -98,9 +129,10 @@ def get_corpus(rulebook_id: str) -> list[DocumentIn]:
 
 @app.post("/audit")
 async def audit(request: AuditRequest) -> StreamingResponse:
-    rulebook = RULEBOOKS.get(request.rulebook_id)
-    if rulebook is None:
+    base = RULEBOOKS.get(request.rulebook_id)
+    if base is None:
         raise HTTPException(404, f"Unknown rulebook {request.rulebook_id!r}")
+    rulebook = _effective_rulebook(base, request)
 
     async def stream():
         started = time.monotonic()
@@ -150,6 +182,49 @@ async def intake_pdf(file: UploadFile) -> JSONResponse:
             "notes": notes,
         }
     )
+
+
+@app.get("/rulebook/{rulebook_id}")
+def get_rulebook(rulebook_id: str) -> Rulebook:
+    rb = RULEBOOKS.get(rulebook_id)
+    if rb is None:
+        raise HTTPException(404, f"Unknown rulebook {rulebook_id!r}")
+    return rb
+
+
+class CompileRequest(BaseModel):
+    instruction: str
+    current_rule: Rule | None = None
+
+
+@app.post("/rules/compile")
+async def compile_rule(request: CompileRequest) -> JSONResponse:
+    """Compile a plain-English requirement into a rule — or refuse with a
+    reason when it isn't checkable against documentation. Does NOT evaluate."""
+    result = await authoring.compile_rule(
+        request.instruction, llm, current_rule=request.current_rule
+    )
+    payload: dict = result.model_dump()
+    if result.checkable:
+        if request.current_rule is not None:
+            rule = request.current_rule.model_copy(
+                update={
+                    "requirement_verbatim": result.requirement
+                    or request.current_rule.requirement_verbatim,
+                    "evidence_required": result.evidence_required,
+                }
+            )
+        else:
+            rule = Rule(
+                rule_id=authoring.make_rule_id(result.requirement),
+                requirement_verbatim=result.requirement,
+                evidence_required=result.evidence_required,
+                rule_type="semantic",
+                scope_docs=[],
+                provenance="user",
+            )
+        payload["rule"] = rule.model_dump()
+    return JSONResponse(content=payload)
 
 
 class PacketRequest(BaseModel):
