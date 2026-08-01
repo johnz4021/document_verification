@@ -1,0 +1,159 @@
+{
+  "corpus_id": "chart_clean",
+  "patient": "Marcus Rivera",
+  "documents": [
+    {
+      "doc_id": "bps_intake",
+      "doc_type": "Psychiatric Evaluation / Biopsychosocial Intake",
+      "date": "2026-06-14",
+      "author_role": "MD / LCSW",
+      "sections": [
+        {
+          "code": "identification",
+          "heading": "Identification and Admission Data",
+          "text": "Marcus Rivera, 39-year-old married male, DOB 03/14/1987. Admitted 2026-06-14 at 09:20 to the adult psychiatric unit. Legal status: voluntary admission, consent to treatment signed by patient on admission. Insurance: Blue Cross Blue Shield IL PPO. Emergency contact: spouse, Elena Rivera."
+        },
+        {
+          "code": "admitting_dx",
+          "heading": "Admitting Diagnoses",
+          "text": "Psychiatric: Alcohol use disorder, severe (F10.20); Major depressive disorder, moderate, single episode (F32.1). Intercurrent medical conditions: essential hypertension (I10), untreated; elevated transaminases (R74.01) — AST 68, ALT 54 on outpatient labs three months prior, consistent with alcohol-related liver injury. No known drug allergies."
+        },
+        {
+          "code": "reason_admission",
+          "heading": "Reason for Admission",
+          "text": "Patient was admitted due to escalating daily alcohol use with worsening depressive symptoms and passive suicidal ideation in the context of marital and occupational stressors. Admission was determined to be clinically appropriate for stabilization, supervised withdrawal management, and initiation of structured treatment."
+        },
+        {
+          "code": "hpi",
+          "heading": "History of Present Illness / Onset and Circumstances",
+          "text": "Onset of the current illness traces to approximately three years ago, when Mr. Rivera's drinking escalated from social use to daily consumption of 8-12 standard drinks following a stressful job change. Over the past six months his mood has progressively declined, with anhedonia, poor sleep, and hopelessness. Circumstances leading to admission: two weeks ago his wife stated she would separate if he did not seek treatment; one week ago his employer issued a formal warning after he smelled of alcohol at work and placed him on a 30-day performance improvement plan. Three days before admission, following a weekend binge, he experienced passive suicidal ideation without plan or intent, reported to his outpatient counselor. He presented voluntarily for inpatient admission at the urging of his wife and outpatient counselor."
+        },
+        {
+          "code": "mse",
+          "heading": "Mental Status Examination",
+          "text": "Appearance: adequately groomed, appears stated age, mild tremor of both hands. Behavior: cooperative, fair eye contact. Speech: normal rate and volume. Mood: 'low.' Affect: constricted, congruent. Thought process: linear and goal-directed. Thought content: passive suicidal ideation without plan or intent; no homicidal ideation; no delusions. Perception: no hallucinations. Cognition: alert and oriented x4; attention and memory grossly intact. Insight: fair. Judgment: fair. Estimated intellectual functioning: average to above average."
+        },
+        {
+          "code": "social",
+          "heading": "Social Service Assessment",
+          "text": "Social history: raised in Chicago, second of three children; father had alcohol use disorder. Bachelor's degree in business. Employed as a project manager at a logistics company for six years. Married 11 years, two children ages 6 and 9. Home plans: patient plans to return home to his wife and children on discharge; the home is stable housing with no safety concerns. Family attitudes: wife was interviewed by social work on 2026-06-15; she is supportive of treatment and willing to participate in family sessions, though she reports exhaustion and states the marriage depends on his sobriety. Community resource contacts: social work provided contact information for the Lakeview Alcoholics Anonymous group and initiated a referral to the Northside Intensive Outpatient Program for step-down care; patient's outpatient counselor was contacted with consent."
+        },
+        {
+          "code": "substance",
+          "heading": "Substance Use History",
+          "text": "Alcohol: daily use, 8-12 standard drinks per day for approximately three years; first use age 16. One prior withdrawal episode in 2023 (tremor, sweating, anxiety) that self-resolved without medical care; current morning tremor present. Prior treatment: completed a 12-week outpatient program in 2023, relapsed within four months. Cannabis: occasional social use, 1-2 times weekly. Tobacco: denies. Other substances: denies. DAST-10 score 6 (substantial); AUDIT-C positive."
+        },
+        {
+          "code": "spiritual",
+          "heading": "Spiritual / Religious",
+          "text": ""
+        },
+        {
+          "code": "eval_completion",
+          "heading": "Evaluation Completion",
+          "text": "This psychiatric evaluation was completed on 2026-06-15 at 14:30 by the attending psychiatrist, within 60 hours of the patient's admission on 2026-06-14 at 09:20."
+        }
+      ]
+    },
+    {
+      "doc_id": "treatment_plan",
+      "doc_type": "Master Treatment Plan",
+      "date": "2026-06-15",
+      "author_role": "Treatment Team",
+      "sections": [
+        {
+          "code": "diagnoses",
+          "heading": "Diagnoses (Substantiated)",
+          "text": "Axis diagnoses with substantiation: (1) Alcohol use disorder, severe (F10.20) — substantiated by daily use of 8-12 standard drinks for three years, prior withdrawal episode, morning tremor on examination, elevated transaminases (AST 68, ALT 54), failed outpatient treatment with relapse, and continued use despite marital and occupational consequences. (2) Major depressive disorder, moderate (F32.1) — substantiated by six months of depressed mood, anhedonia, insomnia, hopelessness, and passive suicidal ideation documented on mental status examination."
+        },
+        {
+          "code": "problems",
+          "heading": "Problem List and Functional Impairments",
+          "text": "Problem 1: Physiological dependence on alcohol with morning tremor and prior withdrawal episode. Problem 2: Depressed mood with passive suicidal ideation. Problem 3: Impaired occupational functioning — formal employer warning, 30-day performance improvement plan. Problem 4: Marital discord secondary to substance use; spouse has stated intent to separate absent treatment. Problem 5: Untreated hypertension and alcohol-related transaminase elevation. Problem 6: History of treatment relapse within four months of completing prior outpatient program."
+        },
+        {
+          "code": "goals",
+          "heading": "Treatment Goals",
+          "text": "Short-term goals (during hospitalization): (1) Complete alcohol withdrawal management without complication, with CIWA-Ar scores below 8 for 48 consecutive hours. (2) Patient will report reduction in depressive symptoms with PHQ-9 decreasing from 16 to below 10 by discharge. (3) Patient will remain free of suicidal ideation for 72 hours prior to discharge and will complete a written safety plan. Long-range goals (post-discharge): (1) Sustained abstinence from alcohol at 6 and 12 months, supported by naltrexone adherence and step-down IOP participation. (2) Return to full occupational functioning and successful completion of the employer's performance improvement plan. (3) Re-engagement in the marital relationship with completion of at least six couples-focused family sessions in aftercare."
+        },
+        {
+          "code": "modalities",
+          "heading": "Treatment Modalities",
+          "text": "Specific modalities utilized during this admission: (1) Supervised alcohol withdrawal management per CIWA-Ar protocol with symptom-triggered lorazepam. (2) Naltrexone 50 mg PO daily, initiated 2026-06-16 after liver function review. (3) Cognitive behavioral therapy group, 60 minutes daily. (4) Motivational interviewing, individual, twice weekly. (5) Psychoeducation group on relapse prevention, three times weekly. (6) One structured family session with spouse prior to discharge. (7) Medical management of hypertension with lisinopril 10 mg PO daily and repeat liver panel."
+        },
+        {
+          "code": "team",
+          "heading": "Treatment Team",
+          "text": "Team members acknowledging this plan: R. Okafor, MD, Attending Psychiatrist — signed 2026-06-15. J. Lindqvist, RN, Charge Nurse — signed 2026-06-15. D. Marsh, LCSW, Social Worker — signed 2026-06-15. A. Chen, CADC, Addictions Counselor — signed 2026-06-15."
+        },
+        {
+          "code": "justification",
+          "heading": "Documentation and Justification",
+          "text": "Inpatient level of care is justified by physiological alcohol dependence with withdrawal risk, co-occurring moderate depression with passive suicidal ideation, and failure of a lower level of care (2023 outpatient program with early relapse). The modalities above directly target the documented diagnoses; progress will be assessed against the stated goals in team review."
+        }
+      ]
+    },
+    {
+      "doc_id": "progress_note_1",
+      "doc_type": "Progress Note (SOAP)",
+      "date": "2026-06-14",
+      "author_role": "RN",
+      "sections": [
+        {
+          "code": "soap",
+          "heading": "SOAP Note — Admission Day",
+          "text": "S: Patient states he is 'nervous but glad to be here.' Reports last drink approximately 14 hours prior to admission. O: Vital signs stable; mild bilateral hand tremor; CIWA-Ar score 6. Oriented x4, cooperative on the unit. A: Early alcohol withdrawal, mild; mood depressed but engaged with admission process. No suicidal ideation expressed this shift. P: Continue CIWA-Ar monitoring every 4 hours; encourage fluids; orient patient to unit schedule; psychiatric evaluation scheduled with Dr. Okafor."
+        }
+      ]
+    },
+    {
+      "doc_id": "progress_note_2",
+      "doc_type": "Progress Note (DAP)",
+      "date": "2026-06-21",
+      "author_role": "LCSW",
+      "sections": [
+        {
+          "code": "dap",
+          "heading": "DAP Note — Week 1",
+          "text": "D: Patient completed withdrawal management without complication; CIWA-Ar below 8 since 2026-06-18 and protocol discontinued. Attended all CBT groups this week and both individual MI sessions. Naltrexone tolerated without side effects. PHQ-9 today 12, down from 16 at admission. Wife visited 2026-06-20; interaction observed to be warm. A: Meaningful early progress against short-term goals: withdrawal goal met, depressive symptoms improving, engagement strong. Ambivalence about long-term abstinence persists — patient stated in group he believes he 'could probably drink normally someday.' P: Continue current modalities per treatment plan. Team recommends adding relapse-prevention focus on workplace triggers in individual sessions. No revision to treatment plan goals at this time; reassess PHQ-9 in one week."
+        }
+      ]
+    },
+    {
+      "doc_id": "progress_note_3",
+      "doc_type": "Progress Note (DSAP)",
+      "date": "2026-07-14",
+      "author_role": "CADC",
+      "sections": [
+        {
+          "code": "dsap",
+          "heading": "DSAP Note",
+          "text": "D: Patient remains abstinent on the unit; naltrexone continued at 50 mg daily. PHQ-9 today 8. Attended family session with spouse on 2026-07-11, described by both as productive. S: 'I told Elena everything. She didn't blow up. I think that means something.' A: Depressive symptoms now below the short-term goal threshold; safety plan drafted and reviewed. Patient verbalizes commitment to IOP step-down and AA attendance. Progress is consistent with the treatment plan; discharge planning appropriate to begin. P: Recommend revising the treatment plan to reflect discharge preparation phase: finalize IOP intake date, complete written safety plan, schedule discharge medication reconciliation."
+        }
+      ]
+    },
+    {
+      "doc_id": "discharge_summary",
+      "doc_type": "Discharge Summary",
+      "date": "2026-07-18",
+      "author_role": "MD",
+      "sections": [
+        {
+          "code": "recap",
+          "heading": "Recapitulation of Hospitalization",
+          "text": "Mr. Rivera was admitted voluntarily on 2026-06-14 for severe alcohol use disorder with early withdrawal and moderate major depressive disorder with passive suicidal ideation. He completed symptom-triggered withdrawal management by 2026-06-18 without complication. Naltrexone 50 mg daily was initiated and tolerated. He participated consistently in daily CBT group, twice-weekly motivational interviewing, and relapse-prevention psychoeducation, and completed one family session with his spouse. Depressive symptoms improved steadily (PHQ-9 16 at admission, 8 prior to discharge) and suicidal ideation resolved by the second week of the stay. Hypertension was managed with lisinopril 10 mg daily; repeat liver panel on 2026-07-10 showed improving transaminases (AST 51, ALT 44)."
+        },
+        {
+          "code": "condition",
+          "heading": "Condition on Discharge",
+          "text": "At discharge on 2026-07-18 the patient is medically stable, abstinent from alcohol for the duration of the admission, and denies suicidal ideation, with a completed written safety plan. Mood is euthymic with brighter affect; insight and judgment are improved. He is motivated for continued treatment and has family support at home."
+        },
+        {
+          "code": "aftercare",
+          "heading": "Follow-up and Aftercare Recommendations",
+          "text": "Recommendations from the treatment team: (1) Intake at Northside Intensive Outpatient Program on 2026-07-21, three evenings weekly. (2) Continue naltrexone 50 mg PO daily; follow-up with psychiatry in 2 weeks. (3) Continue lisinopril 10 mg PO daily; primary care follow-up within 30 days including repeat liver panel. (4) Attend Alcoholics Anonymous at least twice weekly; contact information provided. (5) Couples-focused family sessions through the IOP, per the long-range treatment goal. (6) Return to the emergency department if suicidal ideation recurs; crisis line number provided on the written safety plan."
+        }
+      ]
+    }
+  ]
+}

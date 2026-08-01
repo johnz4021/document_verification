@@ -1,0 +1,66 @@
+{
+  "rulebook_id": "soc2",
+  "name": "SOC 2 Security Criteria (original wording)",
+  "source": "SOC 2 Trust Services Criteria — requirements stated in original wording, not AICPA text",
+  "source_url": "https://www.aicpa-cima.com/resources/download/2017-trust-services-criteria-with-revised-points-of-focus-2022",
+  "default_corpus": "security_policy",
+  "rules": [
+    {
+      "rule_id": "CC6.1-access-restriction",
+      "requirement_verbatim": "Logical access to systems and data is restricted to authorized users through defined access-control mechanisms such as role-based access control.",
+      "evidence_required": "A documented access-control mechanism that ties system access to authorization — e.g., role-based access control, least-privilege assignments, or an approval-gated provisioning process.",
+      "rule_type": "semantic",
+      "scope_docs": ["security_policy_doc"]
+    },
+    {
+      "rule_id": "CC6.2-access-review-cadence",
+      "requirement_verbatim": "User access rights are reviewed on a quarterly basis to confirm that access remains appropriate.",
+      "evidence_required": "Access-review log entries occurring at least quarterly. Checked deterministically from the dates in the review log: any gap of more than 92 days between consecutive reviews is a violation.",
+      "rule_type": "computed",
+      "handler": "quarterly_review_cadence",
+      "scope_docs": ["access_review_log"]
+    },
+    {
+      "rule_id": "CC6.3-mfa",
+      "requirement_verbatim": "Multi-factor authentication is required for remote access and for all administrative accounts.",
+      "evidence_required": "An explicit multi-factor authentication (MFA/2FA) requirement covering remote access and administrator accounts. A generic mention of 'strong authentication' without specifying a second factor does not clearly satisfy this.",
+      "rule_type": "semantic",
+      "scope_docs": ["security_policy_doc"]
+    },
+    {
+      "rule_id": "CC7.3-incident-plan",
+      "requirement_verbatim": "A documented incident-response plan defines roles, escalation paths, and response steps for security incidents.",
+      "evidence_required": "An incident-response plan that names responsible roles, describes how incidents are escalated, and lays out concrete response steps (detect, contain, eradicate, recover, or similar).",
+      "rule_type": "semantic",
+      "scope_docs": ["security_policy_doc", "incident_change_records"]
+    },
+    {
+      "rule_id": "CC7.4-incident-postmortem",
+      "requirement_verbatim": "Security incidents are documented with a root-cause analysis and corrective actions.",
+      "evidence_required": "At least one incident record containing a root-cause analysis and specific corrective actions taken or planned.",
+      "rule_type": "semantic",
+      "scope_docs": ["incident_change_records"]
+    },
+    {
+      "rule_id": "CC8.1-change-approval",
+      "requirement_verbatim": "Changes to production systems are approved by an authorized person before deployment.",
+      "evidence_required": "Change records showing an approver (distinct from the requester where possible) and approval occurring before the deployment date.",
+      "rule_type": "semantic",
+      "scope_docs": ["incident_change_records"]
+    },
+    {
+      "rule_id": "CC9.2-vendor-risk",
+      "requirement_verbatim": "Third-party vendors are risk-assessed before onboarding, and assessments are documented.",
+      "evidence_required": "Documented vendor risk assessments — an evaluation of each vendor's security posture (questionnaire, SOC report review, risk rating) completed before or at onboarding. A bare list of vendors without any assessment documentation does NOT satisfy this.",
+      "rule_type": "semantic",
+      "scope_docs": ["vendor_register"]
+    },
+    {
+      "rule_id": "CC1.4-security-training",
+      "requirement_verbatim": "All personnel complete security-awareness training at least annually.",
+      "evidence_required": "Evidence of an annual security-awareness training requirement and records showing completion within the last year.",
+      "rule_type": "semantic",
+      "scope_docs": ["security_policy_doc"]
+    }
+  ]
+}

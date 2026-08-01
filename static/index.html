@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redline — compliance audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --card: #fffdf9;
+    --ink: #1c1917;
+    --ink-soft: #57534e;
+    --ink-faint: #a8a29e;
+    --hairline: #e2ddd3;
+    --red: #c8102e;
+    --red-soft: #fbe9ec;
+    --green: #1a7f4b;
+    --green-soft: #e7f3ec;
+    --amber: #b45309;
+    --amber-soft: #fdf2e0;
+    --mark: #fde68a;
+    --serif: "Spectral", Georgia, serif;
+    --sans: "Archivo", "Helvetica Neue", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    background-image: radial-gradient(rgba(28,25,23,.035) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 20px;
+    border-bottom: 2px solid var(--ink);
+    background: var(--card);
+    flex-wrap: wrap;
+  }
+  .wordmark {
+    font-family: var(--mono); font-weight: 600; font-size: 17px;
+    letter-spacing: .08em;
+  }
+  .wordmark .red { color: var(--red); }
+  .wordmark .tag {
+    font-weight: 400; color: var(--ink-faint); font-size: 11px;
+    margin-left: 10px; letter-spacing: .04em;
+  }
+  select {
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    padding: 7px 10px; border: 1px solid var(--ink); border-radius: 0;
+    background: var(--card); color: var(--ink); cursor: pointer;
+    max-width: 340px;
+  }
+  #run {
+    font-family: var(--sans); font-weight: 700; font-size: 13px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 8px 22px; border: 2px solid var(--red); border-radius: 0;
+    background: var(--red); color: #fff; cursor: pointer;
+    transition: transform .08s ease, box-shadow .08s ease;
+    box-shadow: 3px 3px 0 rgba(28,25,23,.9);
+  }
+  #run:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 rgba(28,25,23,.9); }
+  #run:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(28,25,23,.9); }
+  #run:disabled { opacity: .45; cursor: wait; }
+  .stats {
+    margin-left: auto; display: flex; align-items: baseline; gap: 18px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+  }
+  .stats b { font-weight: 600; color: var(--ink); }
+  .stats .p b { color: var(--green); }
+  .stats .f b { color: var(--red); }
+  .stats .u b { color: var(--amber); }
+  #elapsed { min-width: 64px; text-align: right; }
+
+  /* ---------- panes ---------- */
+  main {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1.05fr 1fr;
+  }
+  .pane { min-height: 0; overflow-y: auto; padding: 16px; }
+  .pane + .pane { border-left: 1px solid var(--hairline); }
+  .pane-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .pane-label::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+
+  /* ---------- chart (left) ---------- */
+  .doc {
+    background: var(--card); border: 1px solid var(--hairline);
+    border-top: 3px solid var(--ink);
+    margin-bottom: 14px; box-shadow: 0 1px 3px rgba(28,25,23,.06);
+  }
+  .doc-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+  }
+  .doc-title { font-weight: 600; font-size: 12.5px; }
+  .doc-head input[type=date] {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
+    border: 1px solid var(--hairline); background: transparent; padding: 2px 5px;
+  }
+  .doc textarea {
+    display: block; width: 100%; border: 0; resize: vertical;
+    padding: 10px 12px; min-height: 132px;
+    font-family: var(--serif); font-size: 13.5px; line-height: 1.55;
+    color: var(--ink); background: transparent; outline: none;
+  }
+  .doc textarea:focus { background: #fffef2; }
+
+  /* ---------- findings (middle) ---------- */
+  .finding {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+    background: var(--card); border: 1px solid var(--hairline);
+    border-left: 4px solid var(--ink-faint);
+    padding: 9px 12px; margin-bottom: 8px; cursor: pointer;
+    animation: slide-in .28s ease both;
+    transition: background .1s ease;
+  }
+  @keyframes slide-in { from { opacity: 0; transform: translateY(7px); } }
+  .finding:hover { background: #fbf8f1; }
+  .finding.selected { outline: 2px solid var(--ink); outline-offset: -2px; }
+  .finding.v-pass { border-left-color: var(--green); }
+  .finding.v-fail { border-left-color: var(--red); }
+  .finding.v-unclear { border-left-color: var(--amber); }
+  .chip {
+    grid-row: span 2; align-self: start;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: 3px 8px; margin-top: 2px;
+  }
+  .v-pass .chip { color: var(--green); background: var(--green-soft); }
+  .v-fail .chip { color: var(--red); background: var(--red-soft); }
+  .v-unclear .chip { color: var(--amber); background: var(--amber-soft); }
+  .finding .rid { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .finding .req {
+    font-family: var(--serif); font-size: 12.5px; color: var(--ink-soft);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .empty {
+    color: var(--ink-faint); font-family: var(--serif); font-style: italic;
+    font-size: 13.5px; padding: 28px 8px; text-align: center;
+  }
+
+  /* ---------- detail (right) ---------- */
+  #detail .verdict-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  #detail .verdict-word {
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase; padding: 4px 10px;
+  }
+  #detail .verdict-word.pass { color: var(--green); background: var(--green-soft); }
+  #detail .verdict-word.fail { color: #fff; background: var(--red); }
+  #detail .verdict-word.unclear { color: var(--amber); background: var(--amber-soft); }
+  #detail .conf { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .block-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 16px 0 6px;
+  }
+  .reg-quote {
+    font-family: var(--serif); font-size: 14px; line-height: 1.6;
+    border-left: 3px solid var(--ink); padding: 8px 14px;
+    background: var(--card);
+  }
+  .reg-quote .rid-inline { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); display: block; margin-bottom: 4px; }
+  .rationale { font-size: 13px; line-height: 1.6; color: var(--ink); }
+  .source-excerpt {
+    font-family: var(--serif); font-size: 13px; line-height: 1.6;
+    background: var(--card); border: 1px solid var(--hairline);
+    padding: 12px 14px; white-space: pre-wrap; max-height: 320px; overflow-y: auto;
+  }
+  .source-excerpt mark {
+    background: var(--mark); padding: 1px 2px;
+    box-shadow: 0 2px 0 var(--amber);
+  }
+  a.ecfr {
+    display: inline-block; margin-top: 14px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--red);
+    text-decoration: none; border-bottom: 1px solid var(--red);
+  }
+  a.ecfr:hover { background: var(--red-soft); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">RED<span class="red">/</span>LINE<span class="tag">every claim checked against the source</span></div>
+  <select id="rulebook" title="Rulebook"></select>
+  <button id="run">Run audit</button>
+  <div class="stats">
+    <span id="counter"><b>—</b> rules</span>
+    <span class="p"><b id="n-pass">0</b> pass</span>
+    <span class="f"><b id="n-fail">0</b> fail</span>
+    <span class="u"><b id="n-unclear">0</b> unclear</span>
+    <span id="elapsed">0.0s</span>
+  </div>
+</header>
+
+<main>
+  <section class="pane" id="chart-pane">
+    <div class="pane-label">Documents — edit anything</div>
+    <div id="docs"></div>
+  </section>
+  <section class="pane">
+    <div class="pane-label">Findings</div>
+    <div id="findings"><div class="empty">Run the audit to stream findings here.</div></div>
+  </section>
+  <section class="pane">
+    <div class="pane-label">Citation</div>
+    <div id="detail"><div class="empty">Select a finding to see the regulation, the rationale, and the verified source span.</div></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let rulebooks = [];
+let lastRunDocs = {};   // doc_id -> {text, doc_type, date} snapshot at run time
+let selectedEl = null;
+let timerHandle = null;
+
+async function init() {
+  rulebooks = await (await fetch('/rulebooks')).json();
+  const sel = $('rulebook');
+  sel.innerHTML = rulebooks.map(r =>
+    `<option value="${esc(r.rulebook_id)}">${esc(r.name)} (${r.rule_count} rules)</option>`).join('');
+  sel.onchange = () => loadCorpus(sel.value);
+  await loadCorpus(sel.value);
+}
+
+async function loadCorpus(rulebookId) {
+  const docs = await (await fetch(`/corpus/${rulebookId}`)).json();
+  $('docs').innerHTML = docs.map(d => `
+    <div class="doc" data-doc-id="${esc(d.doc_id)}" data-doc-type="${esc(d.doc_type)}">
+      <div class="doc-head">
+        <span class="doc-title">${esc(d.doc_type)}</span>
+        <input type="date" value="${esc(d.date)}">
+      </div>
+      <textarea spellcheck="false">${esc(d.text)}</textarea>
+    </div>`).join('');
+  // size textareas to content (capped)
+  for (const ta of document.querySelectorAll('.doc textarea')) {
+    ta.style.height = Math.min(ta.scrollHeight + 4, 340) + 'px';
+  }
+  resetResults();
+  const rb = rulebooks.find(r => r.rulebook_id === rulebookId);
+  $('counter').innerHTML = `<b>${rb.rule_count}</b> rules`;
+}
+
+function collectDocs() {
+  return [...document.querySelectorAll('.doc')].map(el => ({
+    doc_id: el.dataset.docId,
+    doc_type: el.dataset.docType,
+    date: el.querySelector('input').value,
+    text: el.querySelector('textarea').value,
+  }));
+}
+
+function resetResults() {
+  $('findings').innerHTML = '<div class="empty">Run the audit to stream findings here.</div>';
+  $('detail').innerHTML = '<div class="empty">Select a finding to see the regulation, the rationale, and the verified source span.</div>';
+  for (const k of ['pass','fail','unclear']) $('n-' + k).textContent = '0';
+  $('elapsed').textContent = '0.0s';
+  selectedEl = null;
+}
+
+async function runAudit() {
+  const btn = $('run');
+  btn.disabled = true;
+  resetResults();
+  $('findings').innerHTML = '';
+  const documents = collectDocs();
+  lastRunDocs = Object.fromEntries(documents.map(d => [d.doc_id, d]));
+  const counts = {pass: 0, fail: 0, unclear: 0};
+
+  const t0 = performance.now();
+  timerHandle = setInterval(() =>
+    $('elapsed').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's', 100);
+
+  try {
+    const res = await fetch('/audit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({rulebook_id: $('rulebook').value, documents}),
+    });
+    if (!res.ok) throw new Error(`audit failed: HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream: true});
+      let sep;
+      while ((sep = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, sep); buf = buf.slice(sep + 2);
+        const event = (chunk.match(/^event: (.*)$/m) || [])[1];
+        const data = (chunk.match(/^data: (.*)$/m) || [])[1];
+        if (!event || !data) continue;
+        if (event === 'finding') {
+          const f = JSON.parse(data);
+          counts[f.verdict]++;
+          $('n-' + f.verdict).textContent = counts[f.verdict];
+          appendFinding(f);
+        } else if (event === 'done') {
+          const d = JSON.parse(data);
+          $('elapsed').textContent = d.elapsed_s + 's';
+        }
+      }
+    }
+  } catch (err) {
+    $('findings').insertAdjacentHTML('beforeend',
+      `<div class="empty">Stream error: ${esc(String(err))}</div>`);
+  } finally {
+    clearInterval(timerHandle);
+    btn.disabled = false;
+  }
+}
+
+function appendFinding(f) {
+  const el = document.createElement('div');
+  el.className = `finding v-${f.verdict}`;
+  el.innerHTML = `
+    <span class="chip">${f.verdict}</span>
+    <span class="rid">§${esc(f.rule_id)}</span>
+    <span class="req">${esc(f.requirement_verbatim)}</span>`;
+  el.onclick = () => { select(el); renderDetail(f); };
+  $('findings').appendChild(el);
+}
+
+function select(el) {
+  if (selectedEl) selectedEl.classList.remove('selected');
+  selectedEl = el;
+  el.classList.add('selected');
+}
+
+function renderDetail(f) {
+  let html = `
+    <div class="verdict-line">
+      <span class="verdict-word ${f.verdict}">${f.verdict}</span>
+      <span class="conf">${f.mode === 'computed' ? 'deterministic — no model' : 'confidence: ' + esc(f.confidence)}</span>
+    </div>
+    <div class="block-label">The regulation says</div>
+    <div class="reg-quote"><span class="rid-inline">${esc(f.source)} — ${esc(f.rule_id)}</span>${esc(f.requirement_verbatim)}</div>
+    <div class="block-label">Finding</div>
+    <div class="rationale">${esc(f.rationale)}</div>`;
+
+  if (f.evidence && f.doc_id && lastRunDocs[f.doc_id]) {
+    const doc = lastRunDocs[f.doc_id];
+    let body;
+    if (f.char_start != null && f.char_end != null) {
+      body = esc(doc.text.slice(0, f.char_start))
+           + '<mark>' + esc(doc.text.slice(f.char_start, f.char_end)) + '</mark>'
+           + esc(doc.text.slice(f.char_end));
+    } else {
+      body = esc(doc.text);
+    }
+    html += `
+      <div class="block-label">Verified span — ${esc(doc.doc_type)}</div>
+      <div class="source-excerpt" id="excerpt">${body}</div>`;
+  }
+  if (f.source_url) {
+    html += `<a class="ecfr" href="${esc(f.source_url)}" target="_blank" rel="noopener">verify the source text yourself ↗</a>`;
+  }
+  $('detail').innerHTML = html;
+  // Scroll only the excerpt box — scrollIntoView would also scroll the pane
+  // and clip the verdict line at the top.
+  const excerpt = $('detail').querySelector('#excerpt');
+  const mark = excerpt && excerpt.querySelector('mark');
+  if (mark) excerpt.scrollTop = Math.max(0, mark.offsetTop - excerpt.clientHeight / 2);
+}
+
+$('run').onclick = runAudit;
+init();
+</script>
+</body>
+</html>

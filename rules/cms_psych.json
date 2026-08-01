@@ -1,0 +1,108 @@
+{
+  "rulebook_id": "cms_psych",
+  "name": "42 CFR §482.61 — Psychiatric Medical Records",
+  "source": "42 CFR § 482.61",
+  "source_url": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-482/subpart-E/section-482.61",
+  "default_corpus": "chart_clean",
+  "rules": [
+    {
+      "rule_id": "482.61(a)(1)",
+      "requirement_verbatim": "The identification data must include the patient's legal status.",
+      "evidence_required": "An explicit statement of the patient's legal admission status (e.g., voluntary, involuntary, court-committed) in the chart's identification or admission data.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(a)(2)",
+      "requirement_verbatim": "A provisional or admitting diagnosis must be made on every patient at the time of admission, and must include the diagnoses of intercurrent diseases as well as the psychiatric diagnoses.",
+      "evidence_required": "Admitting or provisional diagnoses documented at admission that include BOTH psychiatric diagnoses AND any co-occurring medical (intercurrent) conditions. Psychiatric diagnoses alone, with medical conditions omitted despite being noted elsewhere, does not fully satisfy this.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(a)(3)",
+      "requirement_verbatim": "The reasons for admission must be clearly documented as stated by the patient and/or others significantly involved.",
+      "evidence_required": "The reason for admission recorded in the patient's own words (or those of family/others significantly involved) — direct quotes or clearly attributed first-person statements. A clinician's third-person summary of why the patient was admitted is NOT sufficient on its own; the regulation requires the reasons as STATED BY the patient or others involved. If only clinician framing exists, the requirement is addressed but not clearly satisfied.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(a)(4)",
+      "requirement_verbatim": "The social service records, including reports of interviews with patients, family members, and others, must provide an assessment of home plans and family attitudes, and community resource contacts as well as a social history.",
+      "evidence_required": "Social service documentation covering (1) an assessment of home plans, (2) family attitudes toward the patient and treatment, (3) community resource contacts, and (4) a social history. Look for a social work or psychosocial section addressing these elements.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(b)(1)",
+      "requirement_verbatim": "Each patient must receive a psychiatric evaluation that must— (1) Be completed within 60 hours of admission;",
+      "evidence_required": "Documentation that a psychiatric evaluation was completed, with dates/times showing completion within 60 hours of the admission date/time.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(b)(3)",
+      "requirement_verbatim": "Each patient must receive a psychiatric evaluation that must— (3) Contain a record of mental status;",
+      "evidence_required": "A documented mental status examination (appearance, orientation, mood, affect, thought process/content, cognition, insight, judgment, or similar MSE elements).",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(b)(4)",
+      "requirement_verbatim": "Each patient must receive a psychiatric evaluation that must— (4) Note the onset of illness and the circumstances leading to admission;",
+      "evidence_required": "Documentation of when the illness began (onset, duration, escalation) and the specific circumstances or precipitating events that led to this admission.",
+      "rule_type": "semantic",
+      "scope_docs": ["bps_intake"]
+    },
+    {
+      "rule_id": "482.61(c)(1)",
+      "requirement_verbatim": "Each patient must have an individual comprehensive treatment plan that must be based on an inventory of the patient's strengths and disabilities.",
+      "evidence_required": "An explicit inventory or description of the patient's STRENGTHS — assets, capabilities, skills, motivation, or protective factors — alongside the documented disabilities/problems. Documentation of deficits, problems, and disabilities alone does NOT satisfy this: the plan must be based on both strengths AND disabilities. Incidental mentions of external circumstances (e.g., a supportive family member noted in the social history) are not an inventory of the patient's strengths. Absence of a documented strengths inventory is a failure.",
+      "rule_type": "semantic",
+      "scope_docs": ["treatment_plan", "bps_intake"]
+    },
+    {
+      "rule_id": "482.61(c)(1)(i)",
+      "requirement_verbatim": "The written plan must include— (i) A substantiated diagnosis;",
+      "evidence_required": "Diagnoses in the treatment plan that are substantiated — tied to documented clinical findings, symptoms, or assessment results, not merely listed as bare codes.",
+      "rule_type": "semantic",
+      "scope_docs": ["treatment_plan"]
+    },
+    {
+      "rule_id": "482.61(c)(1)(ii)",
+      "requirement_verbatim": "The written plan must include— (ii) Short-term and long-range goals;",
+      "evidence_required": "Both short-term goals AND long-range goals stated in the treatment plan. Look for explicitly labeled or clearly distinguishable near-term versus longer-horizon goals.",
+      "rule_type": "semantic",
+      "scope_docs": ["treatment_plan"]
+    },
+    {
+      "rule_id": "482.61(c)(1)(iii)",
+      "requirement_verbatim": "The written plan must include— (iii) The specific treatment modalities utilized;",
+      "evidence_required": "Specific, named treatment modalities (e.g., particular therapies, groups, medications with doses, frequencies). Vague statements like 'therapy and medication' without specifics do not satisfy this.",
+      "rule_type": "semantic",
+      "scope_docs": ["treatment_plan"]
+    },
+    {
+      "rule_id": "482.61(c)(1)(iv)",
+      "requirement_verbatim": "The written plan must include— (iv) The responsibilities of each member of the treatment team; and",
+      "evidence_required": "A documented statement of WHAT each treatment team member is responsible for — specific duties or interventions assigned to each role or person. A list of team member names, credentials, and signatures WITHOUT stated responsibilities does NOT satisfy this requirement.",
+      "rule_type": "semantic",
+      "scope_docs": ["treatment_plan"]
+    },
+    {
+      "rule_id": "482.61(d)",
+      "requirement_verbatim": "The frequency of progress notes is determined by the condition of the patient but must be recorded at least weekly for the first 2 months and at least once a month thereafter and must contain recommendations for revisions in the treatment plan as indicated, as well as precise assessment of the patient's progress in accordance with the original or revised treatment plan.",
+      "evidence_required": "Progress notes recorded at least weekly during the first 2 months of the stay. Checked deterministically from document dates: any gap of more than 7 days between consecutive progress notes (or between admission and the first note) within the first 2 months is a violation.",
+      "rule_type": "computed",
+      "handler": "progress_note_cadence",
+      "scope_docs": ["bps_intake", "progress_note_1", "progress_note_2", "progress_note_3"]
+    },
+    {
+      "rule_id": "482.61(e)",
+      "requirement_verbatim": "The record of each patient who has been discharged must have a discharge summary that includes a recapitulation of the patient's hospitalization and recommendations from appropriate services concerning follow-up or aftercare as well as a brief summary of the patient's condition on discharge.",
+      "evidence_required": "A discharge summary containing (1) a recapitulation of the hospitalization course, (2) follow-up/aftercare recommendations, and (3) a brief summary of the patient's condition at discharge.",
+      "rule_type": "semantic",
+      "scope_docs": ["discharge_summary"]
+    }
+  ]
+}

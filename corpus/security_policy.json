@@ -1,0 +1,73 @@
+{
+  "corpus_id": "security_policy",
+  "patient": "Acme Analytics, Inc.",
+  "documents": [
+    {
+      "doc_id": "security_policy_doc",
+      "doc_type": "Information Security Policy v3.2",
+      "date": "2026-01-15",
+      "author_role": "CISO",
+      "sections": [
+        {
+          "code": "access",
+          "heading": "Access Control",
+          "text": "Access to production systems and customer data is granted through role-based access control. Roles are defined per team (Engineering, Support, Finance) and mapped to the minimum permissions required for the role; all access requests require manager approval in the provisioning system before grant. Shared accounts are prohibited. Remote access to internal systems requires strong authentication over the company VPN."
+        },
+        {
+          "code": "training",
+          "heading": "Security Awareness Training",
+          "text": "All personnel must complete security-awareness training within 30 days of hire and annually thereafter. The most recent annual campaign completed on 2026-05-30 with a 100% completion rate across 84 employees, tracked in the learning management system."
+        },
+        {
+          "code": "incident",
+          "heading": "Incident Response Plan",
+          "text": "Security incidents are managed by the Incident Response Team. Roles: the on-call engineer acts as first responder; the Security Lead is the Incident Commander; the CISO owns external communication and regulatory notification. Escalation path: first responder pages the Security Lead within 15 minutes of detection; the Security Lead escalates to the CISO for any incident rated High or above. Response steps: (1) detect and triage, (2) contain affected systems, (3) eradicate the cause, (4) recover service, (5) complete a post-incident review within 5 business days."
+        }
+      ]
+    },
+    {
+      "doc_id": "access_review_log",
+      "doc_type": "Quarterly Access Review Log",
+      "date": "2026-06-15",
+      "author_role": "Security Lead",
+      "sections": [
+        {
+          "code": "log",
+          "heading": "Completed Access Reviews",
+          "text": "Review completed 2025-08-20 — all production roles reviewed, 3 stale accounts removed. Review completed 2025-11-08 — all production roles reviewed, 1 contractor account expired. Review completed 2026-03-20 — all production roles reviewed, 2 role downgrades applied. Review completed 2026-06-15 — all production roles reviewed, no findings."
+        }
+      ]
+    },
+    {
+      "doc_id": "incident_change_records",
+      "doc_type": "Incident & Change Records (Q2 2026)",
+      "date": "2026-06-30",
+      "author_role": "Security Lead",
+      "sections": [
+        {
+          "code": "incident_record",
+          "heading": "Incident INC-2026-014 — Phishing credential compromise",
+          "text": "On 2026-04-11 a support analyst entered credentials into a phishing page. Detected by impossible-travel alert within 22 minutes; session revoked and password reset (contained). Root-cause analysis: the phishing domain passed the email gateway because lookalike-domain detection was disabled for a vendor allowlist entry. Corrective actions: lookalike-domain detection re-enabled globally on 2026-04-12; vendor allowlist reduced from 41 to 9 entries; targeted phishing refresher assigned to the support team, completed 2026-04-25."
+        },
+        {
+          "code": "change_log",
+          "heading": "Production Change Log (excerpt)",
+          "text": "CHG-2026-088: database failover configuration change. Requested by J. Park (SRE) 2026-05-02; approved by M. Osei (Engineering Manager) 2026-05-03; deployed 2026-05-05. CHG-2026-091: payment-service dependency upgrade. Requested by L. Tran 2026-05-19; approved by M. Osei 2026-05-20; deployed 2026-05-21. CHG-2026-097: TLS certificate rotation. Requested by J. Park 2026-06-10; approved by R. Whitfield (CISO) 2026-06-10; deployed 2026-06-11."
+        }
+      ]
+    },
+    {
+      "doc_id": "vendor_register",
+      "doc_type": "Vendor Register",
+      "date": "2026-06-01",
+      "author_role": "Finance",
+      "sections": [
+        {
+          "code": "vendors",
+          "heading": "Active Third-Party Vendors",
+          "text": "CloudHost Inc. — infrastructure hosting, onboarded 2024-02-01. MailFlow — transactional email, onboarded 2024-09-15. LedgerPay — payment processing, onboarded 2025-03-10. DataDash — analytics, onboarded 2026-04-22. Renewal dates and contract owners are tracked in the finance system."
+        }
+      ]
+    }
+  ]
+}
