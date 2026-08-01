@@ -1,5 +1,5 @@
 [project]
-name = "redline"
+name = "blueline"
 version = "0.1.0"
 description = "Reads a document set against a rulebook and cites every place the rules aren't satisfied."
 requires-python = ">=3.11"

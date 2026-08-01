@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Redline — compliance audit</title>
+<title>Blueline — compliance audit</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,6 +17,8 @@
     --hairline: #e2ddd3;
     --red: #c8102e;
     --red-soft: #fbe9ec;
+    --blue: #1d4ed8;
+    --blue-deep: #1638a8;
     --green: #1a7f4b;
     --green-soft: #e7f3ec;
     --amber: #b45309;
@@ -29,7 +31,7 @@
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; }
   body {
-    font-family: var(--sans);
+    font-family: var(--sans); font-size: 15px;
     background: var(--paper);
     background-image: radial-gradient(rgba(28,25,23,.035) 1px, transparent 1px);
     background-size: 22px 22px;
@@ -47,62 +49,100 @@
     flex-wrap: wrap;
   }
   .wordmark {
-    font-family: var(--mono); font-weight: 600; font-size: 17px;
+    font-family: var(--mono); font-weight: 600; font-size: 18px;
     letter-spacing: .08em;
   }
-  .wordmark .red { color: var(--red); }
+  .wordmark .slash { color: var(--blue); }
   .wordmark .tag {
-    font-weight: 400; color: var(--ink-faint); font-size: 11px;
+    font-weight: 400; color: var(--ink-faint); font-size: 12px;
     margin-left: 10px; letter-spacing: .04em;
   }
   select {
-    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    font-family: var(--sans); font-size: 14px; font-weight: 500;
     padding: 7px 10px; border: 1px solid var(--ink); border-radius: 0;
     background: var(--card); color: var(--ink); cursor: pointer;
     max-width: 340px;
   }
   #run {
-    font-family: var(--sans); font-weight: 700; font-size: 13px;
+    font-family: var(--sans); font-weight: 700; font-size: 14px;
     letter-spacing: .06em; text-transform: uppercase;
-    padding: 8px 22px; border: 2px solid var(--red); border-radius: 0;
-    background: var(--red); color: #fff; cursor: pointer;
+    padding: 9px 24px; border: 2px solid var(--blue); border-radius: 0;
+    background: var(--blue); color: #fff; cursor: pointer;
     transition: transform .08s ease, box-shadow .08s ease;
     box-shadow: 3px 3px 0 rgba(28,25,23,.9);
   }
   #run:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 rgba(28,25,23,.9); }
   #run:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(28,25,23,.9); }
-  #run:disabled { opacity: .45; cursor: wait; }
+  #run:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
   #download-report {
-    font-family: var(--sans); font-weight: 600; font-size: 12px;
+    font-family: var(--sans); font-weight: 600; font-size: 13px;
     letter-spacing: .05em; text-transform: uppercase;
-    padding: 8px 14px; border: 2px solid var(--ink); border-radius: 0;
+    padding: 9px 16px; border: 2px solid var(--ink); border-radius: 0;
     background: var(--card); color: var(--ink); cursor: pointer;
   }
-  #download-report:hover:not(:disabled) { background: var(--ink); color: var(--card); }
+  #download-report.ready { background: var(--ink); color: var(--card); }
+  #download-report:hover:not(:disabled) { background: var(--ink-soft); color: var(--card); }
   #download-report:disabled { opacity: .35; cursor: not-allowed; }
   .stats {
     margin-left: auto; display: flex; align-items: baseline; gap: 18px;
-    font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+    font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft);
   }
   .stats b { font-weight: 600; color: var(--ink); }
   .stats .p b { color: var(--green); }
   .stats .f b { color: var(--red); }
   .stats .u b { color: var(--amber); }
   #elapsed { min-width: 64px; text-align: right; }
+  body[data-state="empty"] .stats { display: none; }
+  body:not(.has-run) .run-stat { display: none; }
 
-  /* ---------- panes ---------- */
-  main {
-    flex: 1; min-height: 0;
-    display: grid; grid-template-columns: 1fr 1.05fr 1fr;
-  }
+  /* ---------- page states ---------- */
+  main { flex: 1; min-height: 0; display: grid; }
+  body[data-state="empty"] main { grid-template-columns: 1fr; }
+  body[data-state="empty"] #findings-pane,
+  body[data-state="empty"] #citation-pane { display: none; }
+  body[data-state="loaded"] main { grid-template-columns: 1fr 1.05fr; }
+  body[data-state="loaded"].citation-open main { grid-template-columns: 1fr 1.05fr 1.1fr; }
+  body[data-state="loaded"]:not(.citation-open) #citation-pane { display: none; }
+
   .pane { min-height: 0; overflow-y: auto; padding: 16px; }
   .pane + .pane { border-left: 1px solid var(--hairline); }
   .pane-label {
-    font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+    font-size: 11px; font-weight: 700; letter-spacing: .14em;
     text-transform: uppercase; color: var(--ink-faint);
     margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
   }
   .pane-label::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+
+  /* ---------- drop zone (state A) ---------- */
+  #dropzone {
+    max-width: 640px; margin: 9vh auto 0; padding: 64px 40px;
+    border: 2px dashed var(--ink-faint); background: var(--card);
+    text-align: center; cursor: pointer;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  #dropzone:hover, #dropzone.dragging { border-color: var(--ink); background: #fffef2; }
+  #dropzone .dz-main { font-family: var(--serif); font-size: 21px; margin-bottom: 8px; }
+  #dropzone .dz-sub { font-size: 14px; color: var(--ink-soft); margin-bottom: 26px; }
+  #dropzone .dz-busy { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); display: none; }
+  #dropzone.busy .dz-busy { display: block; margin-top: 14px; }
+  #load-sample {
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+    text-decoration: none; border-bottom: 1px solid var(--ink-faint);
+  }
+  #load-sample:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ---------- source strip (state B) ---------- */
+  #source-strip {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+    padding: 6px 0 10px;
+  }
+  #source-strip button {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+    border: 0; background: none; padding: 0; cursor: pointer;
+    color: var(--ink-soft); border-bottom: 1px solid var(--ink-faint);
+  }
+  #source-strip button:hover { color: var(--ink); border-color: var(--ink); }
 
   /* ---------- chart (left) ---------- */
   .doc {
@@ -112,52 +152,37 @@
   }
   .doc-head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+    padding: 10px 12px 2px;
   }
-  .doc-title { font-weight: 600; font-size: 12.5px; }
+  .doc-title { font-weight: 600; font-size: 13.5px; }
   .doc-head input[type=date] {
-    font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
     border: 1px solid var(--hairline); background: transparent; padding: 2px 5px;
   }
   .doc textarea {
     display: block; width: 100%; border: 0; resize: vertical;
-    padding: 10px 12px; min-height: 132px;
-    font-family: var(--serif); font-size: 13.5px; line-height: 1.55;
+    padding: 8px 12px 12px; min-height: 132px;
+    font-family: var(--serif); font-size: 14.5px; line-height: 1.55;
     color: var(--ink); background: transparent; outline: none;
   }
   .doc textarea:focus { background: #fffef2; }
-  #upload-btn {
-    font-family: var(--mono); font-size: 10px; font-weight: 600;
-    letter-spacing: .08em; text-transform: uppercase;
-    padding: 3px 10px; border: 1px solid var(--ink); background: var(--card);
-    color: var(--ink); cursor: pointer;
-  }
-  #upload-btn:hover { background: var(--ink); color: var(--card); }
-  #upload-btn:disabled { opacity: .5; cursor: wait; }
-  .source-toggle { display: flex; gap: 0; margin-bottom: 12px; }
-  .source-toggle button {
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em;
-    padding: 5px 12px; border: 1px solid var(--ink); background: var(--card);
-    color: var(--ink-soft); cursor: pointer;
-  }
-  .source-toggle button + button { border-left: 0; }
-  .source-toggle button.active { background: var(--ink); color: var(--card); font-weight: 600; }
   .prov-chip {
-    font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .05em;
     color: var(--ink-soft); background: var(--paper);
     border: 1px solid var(--hairline); padding: 1px 6px; margin-left: 8px;
     white-space: nowrap;
   }
   .doc-note {
-    font-family: var(--serif); font-style: italic; font-size: 11.5px;
+    font-family: var(--serif); font-style: italic; font-size: 12.5px;
     color: var(--ink-faint); padding: 4px 12px 0;
   }
   .banner {
     display: flex; align-items: baseline; gap: 10px;
     background: var(--red-soft); border: 1px solid var(--red);
-    color: var(--ink); font-size: 12.5px; line-height: 1.5;
-    padding: 9px 12px; margin-bottom: 12px;
+    color: var(--ink); font-size: 13.5px; line-height: 1.5;
+    padding: 9px 12px; margin: 0 auto 12px; max-width: 640px;
   }
+  body[data-state="loaded"] .banner { max-width: none; }
   .banner button {
     margin-left: auto; border: 0; background: none; cursor: pointer;
     font-family: var(--mono); font-size: 12px; color: var(--red);
@@ -165,14 +190,19 @@
 
   /* ---------- rule authoring & inspector ---------- */
   #add-rule-btn {
-    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
     letter-spacing: .08em; text-transform: uppercase;
     padding: 3px 10px; border: 1px solid var(--ink); background: var(--card);
     color: var(--ink); cursor: pointer;
   }
   #add-rule-btn:hover { background: var(--ink); color: var(--card); }
+  #close-citation {
+    border: 0; background: none; cursor: pointer; color: var(--ink-faint);
+    font-family: var(--mono); font-size: 13px; padding: 0 2px;
+  }
+  #close-citation:hover { color: var(--ink); }
   .prov-badge {
-    font-family: var(--mono); font-size: 9px; font-weight: 600;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 600;
     letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px;
     white-space: nowrap;
   }
@@ -180,35 +210,35 @@
   .prov-badge.modified { color: var(--amber); background: var(--amber-soft); }
   .finding.rule-disabled { opacity: .45; border-left-color: var(--ink-faint); }
   .finding.rule-disabled .chip { color: var(--ink-soft); background: var(--paper); }
-  .ctl-block { border-top: 1px solid var(--hairline); margin-top: 18px; padding-top: 12px; }
+  .ctl-block { margin-top: 26px; }
   .ctl-block textarea, .ctl-block input[type=text] {
-    width: 100%; font-family: var(--sans); font-size: 12px; line-height: 1.5;
+    width: 100%; font-family: var(--sans); font-size: 13px; line-height: 1.5;
     border: 1px solid var(--hairline); background: var(--card); color: var(--ink);
     padding: 8px; resize: vertical;
   }
   .ctl-block textarea:focus, .ctl-block input[type=text]:focus { outline: 1px solid var(--ink); }
   .ctl-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
   .btn-sm {
-    font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600;
     letter-spacing: .06em; text-transform: uppercase;
-    padding: 5px 12px; border: 1px solid var(--ink); background: var(--card);
+    padding: 6px 13px; border: 1px solid var(--ink); background: var(--card);
     color: var(--ink); cursor: pointer;
   }
   .btn-sm:hover:not(:disabled) { background: var(--ink); color: var(--card); }
-  .btn-sm.primary { background: var(--red); border-color: var(--red); color: #fff; }
-  .btn-sm.primary:hover:not(:disabled) { background: #a30d26; }
+  .btn-sm.primary { background: var(--ink); border-color: var(--ink); color: var(--card); }
+  .btn-sm.primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
   .btn-sm:disabled { opacity: .45; cursor: wait; }
-  .toggle-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-soft); }
+  .toggle-row { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-soft); }
   .diff-box { border: 1px solid var(--hairline); padding: 8px 10px; margin-top: 6px;
-              font-size: 12px; line-height: 1.5; }
-  .diff-box.old { background: var(--red-soft); text-decoration: line-through;
-                  text-decoration-color: rgba(200,16,46,.4); color: var(--ink-soft); }
+              font-size: 13px; line-height: 1.5; }
+  .diff-box.old { background: var(--paper); text-decoration: line-through;
+                  text-decoration-color: rgba(28,25,23,.35); color: var(--ink-soft); }
   .diff-box.new { background: var(--green-soft); }
   .refusal-card {
     border: 1.5px solid var(--amber); background: var(--amber-soft);
-    padding: 12px 14px; font-size: 13px; line-height: 1.55;
+    padding: 12px 14px; font-size: 14px; line-height: 1.55;
   }
-  .refusal-card b { font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+  .refusal-card b { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em;
                     text-transform: uppercase; color: var(--amber); display: block; margin-bottom: 6px; }
 
   /* ---------- findings (middle) ---------- */
@@ -216,7 +246,7 @@
     display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
     background: var(--card); border: 1px solid var(--hairline);
     border-left: 4px solid var(--ink-faint);
-    padding: 9px 12px; margin-bottom: 8px; cursor: pointer;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
     animation: slide-in .28s ease both;
     transition: background .1s ease;
   }
@@ -228,99 +258,126 @@
   .finding.v-unclear { border-left-color: var(--amber); }
   .chip {
     grid-row: span 2; align-self: start;
-    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
     letter-spacing: .1em; text-transform: uppercase;
     padding: 3px 8px; margin-top: 2px;
   }
   .v-pass .chip { color: var(--green); background: var(--green-soft); }
   .v-fail .chip { color: var(--red); background: var(--red-soft); }
   .v-unclear .chip { color: var(--amber); background: var(--amber-soft); }
-  .finding .rid { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .finding .rid { font-family: var(--mono); font-size: 13px; font-weight: 600; }
   .finding .req {
-    font-family: var(--serif); font-size: 12.5px; color: var(--ink-soft);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-family: var(--serif); font-size: 14px; color: var(--ink);
+    line-height: 1.45;
+  }
+  /* pass (and disabled/off) rows compress to one quiet line; fails demand attention */
+  .finding.v-pass, .finding.v-off, .finding.rule-disabled {
+    grid-template-columns: auto auto 1fr; gap: 10px; align-items: baseline;
+    padding: 6px 12px;
+  }
+  .finding.v-pass .chip, .finding.v-off .chip, .finding.rule-disabled .chip {
+    grid-row: auto; margin-top: 0; font-size: 10px;
+  }
+  .finding.v-pass .rid, .finding.v-off .rid, .finding.rule-disabled .rid { font-size: 12px; }
+  .finding.v-pass .req, .finding.v-off .req, .finding.rule-disabled .req {
+    font-size: 12.5px; color: var(--ink-soft); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; min-width: 0;
   }
   .empty {
     color: var(--ink-faint); font-family: var(--serif); font-style: italic;
-    font-size: 13.5px; padding: 28px 8px; text-align: center;
+    font-size: 14.5px; padding: 28px 8px; text-align: center;
   }
 
-  /* ---------- detail (right) ---------- */
-  #detail .verdict-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  /* ---------- citation (right) ---------- */
+  #detail .verdict-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   #detail .verdict-word {
-    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    font-family: var(--mono); font-size: 14px; font-weight: 600;
     letter-spacing: .12em; text-transform: uppercase; padding: 4px 10px;
   }
   #detail .verdict-word.pass { color: var(--green); background: var(--green-soft); }
   #detail .verdict-word.fail { color: #fff; background: var(--red); }
   #detail .verdict-word.unclear { color: var(--amber); background: var(--amber-soft); }
-  #detail .conf { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .conf-chip {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-soft); background: var(--paper);
+    border: 1px solid var(--hairline); padding: 2px 7px;
+  }
   .block-label {
-    font-size: 10px; font-weight: 700; letter-spacing: .13em;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .13em;
     text-transform: uppercase; color: var(--ink-faint); margin: 16px 0 6px;
   }
   .reg-quote {
-    font-family: var(--serif); font-size: 14px; line-height: 1.6;
+    font-family: var(--serif); font-size: 15px; line-height: 1.6;
     border-left: 3px solid var(--ink); padding: 8px 14px;
     background: var(--card);
   }
-  .reg-quote .rid-inline { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); display: block; margin-bottom: 4px; }
-  .rationale { font-size: 13px; line-height: 1.6; color: var(--ink); }
+  .reg-quote .rid-inline { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); display: block; margin-bottom: 4px; }
+  .rationale { font-size: 14px; line-height: 1.6; color: var(--ink); }
   .source-excerpt {
-    font-family: var(--serif); font-size: 13px; line-height: 1.6;
+    font-family: var(--serif); font-size: 14px; line-height: 1.6;
     background: var(--card); border: 1px solid var(--hairline);
-    padding: 12px 14px; white-space: pre-wrap; max-height: 320px; overflow-y: auto;
+    padding: 12px 14px; white-space: pre-wrap; max-height: 40vh; overflow-y: auto;
   }
   .source-excerpt mark {
     background: var(--mark); padding: 1px 2px;
     box-shadow: 0 2px 0 var(--amber);
   }
   a.ecfr {
-    display: inline-block; margin-top: 14px;
-    font-family: var(--mono); font-size: 11.5px; color: var(--red);
-    text-decoration: none; border-bottom: 1px solid var(--red);
+    display: inline-block; margin-top: 6px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+    text-decoration: none; border-bottom: 1px solid var(--ink-faint);
   }
-  a.ecfr:hover { background: var(--red-soft); }
+  a.ecfr:hover { color: var(--ink); border-color: var(--ink); }
 </style>
 </head>
-<body>
+<body data-state="empty">
 
 <header>
-  <div class="wordmark">RED<span class="red">/</span>LINE<span class="tag">every claim checked against the source</span></div>
+  <div class="wordmark">BLUE<span class="slash">/</span>LINE<span class="tag">every claim checked against the source</span></div>
   <select id="rulebook" title="Rulebook"></select>
-  <button id="run">Run audit</button>
+  <button id="run" disabled title="Load a chart first">Run audit</button>
   <button id="download-report" disabled title="Run an audit first">Download report</button>
   <div class="stats">
     <span id="counter"><b>—</b> rules</span>
-    <span class="p"><b id="n-pass">0</b> pass</span>
-    <span class="f"><b id="n-fail">0</b> fail</span>
-    <span class="u"><b id="n-unclear">0</b> unclear</span>
-    <span id="elapsed">0.0s</span>
+    <span class="p run-stat"><b id="n-pass">0</b> pass</span>
+    <span class="f run-stat"><b id="n-fail">0</b> fail</span>
+    <span class="u run-stat"><b id="n-unclear">0</b> unclear</span>
+    <span id="elapsed" class="run-stat">0.0s</span>
   </div>
 </header>
 
 <main>
   <section class="pane" id="chart-pane">
-    <div class="pane-label">Documents — edit anything
-      <button id="upload-btn" type="button">Upload PDF</button>
-      <input type="file" id="pdf-input" accept="application/pdf" hidden>
-    </div>
     <div id="banner-slot"></div>
-    <div id="source-toggle" class="source-toggle" hidden>
-      <button type="button" data-source="corpus" class="active">Committed corpus</button>
-      <button type="button" data-source="upload"></button>
+    <div id="dropzone">
+      <div class="dz-main">Drop an EHR chart export (PDF)</div>
+      <div class="dz-sub">or click to choose a file</div>
+      <a id="load-sample" href="#">or load a sample chart</a>
+      <div class="dz-busy">Extracting documents…</div>
     </div>
-    <div id="docs"></div>
+    <input type="file" id="pdf-input" accept="application/pdf" hidden>
+    <div id="loaded-chart" hidden>
+      <div class="pane-label">Documents — edit anything</div>
+      <div id="source-strip">
+        <span id="strip-label"></span>
+        <button id="strip-replace" type="button">replace (upload PDF)</button>
+        <button id="strip-switch" type="button" hidden></button>
+      </div>
+      <div id="docs"></div>
+    </div>
   </section>
-  <section class="pane">
+  <section class="pane" id="findings-pane">
     <div class="pane-label">Findings
       <button id="add-rule-btn" type="button">+ Add rule</button>
     </div>
     <div id="findings"><div class="empty">Run the audit to stream findings here.</div></div>
   </section>
-  <section class="pane">
-    <div class="pane-label">Citation</div>
-    <div id="detail"><div class="empty">Select a finding to see the regulation, the rationale, and the verified source span.</div></div>
+  <section class="pane" id="citation-pane">
+    <div class="pane-label">Citation
+      <button id="close-citation" type="button" title="Close">✕</button>
+    </div>
+    <div id="detail"></div>
   </section>
 </main>
 
@@ -342,24 +399,69 @@ let uploadedNotes = {};
 let uploadedFilename = '';
 let currentSource = 'corpus';   // 'corpus' | 'upload'
 
+// ---------- page state ----------
+
+function setState(state) {
+  document.body.dataset.state = state;
+  const loaded = state === 'loaded';
+  $('dropzone').hidden = loaded;
+  $('loaded-chart').hidden = !loaded;
+  $('run').disabled = !loaded;
+  $('run').title = loaded ? '' : 'Load a chart first';
+}
+
+function openCitation() { document.body.classList.add('citation-open'); }
+function closeCitation() {
+  document.body.classList.remove('citation-open');
+  if (selectedEl) { selectedEl.classList.remove('selected'); selectedEl = null; }
+}
+
+function updateStrip() {
+  const n = document.querySelectorAll('.doc').length;
+  const sw = $('strip-switch');
+  if (currentSource === 'upload') {
+    $('strip-label').textContent = `${uploadedFilename} · ${n} documents extracted`;
+    sw.hidden = false;
+    sw.textContent = 'use sample chart';
+    sw.dataset.source = 'corpus';
+  } else {
+    $('strip-label').textContent = `Sample chart (committed corpus) · ${n} documents`;
+    sw.hidden = !uploadedDocs;
+    if (uploadedDocs) { sw.textContent = `use ${uploadedFilename}`; sw.dataset.source = 'upload'; }
+  }
+}
+
+// ---------- data loading ----------
+
 async function init() {
   rulebooks = await (await fetch('/rulebooks')).json();
   const sel = $('rulebook');
   sel.innerHTML = rulebooks.map(r =>
     `<option value="${esc(r.rulebook_id)}">${esc(r.name)} (${r.rule_count} rules)</option>`).join('');
-  sel.onchange = () => loadCorpus(sel.value);
-  await loadCorpus(sel.value);
+  sel.onchange = () => loadRulebook(sel.value);
+  await loadRulebook(sel.value);
 }
 
-async function loadCorpus(rulebookId) {
+async function loadRulebook(rulebookId) {
   corpusDocs = await (await fetch(`/corpus/${rulebookId}`)).json();
   const rbFull = await (await fetch(`/rulebook/${rulebookId}`)).json();
   workingRules = rbFull.rules;
   pristineRules = Object.fromEntries(rbFull.rules.map(r => [r.rule_id, JSON.parse(JSON.stringify(r))]));
   disabledIds = new Set();
-  if (currentSource === 'corpus') renderDocs(corpusDocs);
+  if (document.body.dataset.state === 'loaded' && currentSource === 'corpus') {
+    renderDocs(corpusDocs);
+    updateStrip();
+  }
   resetResults();
   updateCounter();
+}
+
+function loadSample() {
+  currentSource = 'corpus';
+  renderDocs(corpusDocs);
+  setState('loaded');
+  updateStrip();
+  $('chart-pane').scrollTop = 0;
 }
 
 function activeRules() {
@@ -422,17 +524,16 @@ function switchSource(source) {
   if (currentSource === 'corpus') corpusDocs = collectDocs();
   else uploadedDocs = collectDocs();
   currentSource = source;
-  for (const b of $('source-toggle').querySelectorAll('button')) {
-    b.classList.toggle('active', b.dataset.source === source);
-  }
   renderDocs(source === 'upload' ? uploadedDocs : corpusDocs, source === 'upload');
+  updateStrip();
   resetResults();
+  $('chart-pane').scrollTop = 0;
 }
 
 async function handleUpload(file) {
-  const btn = $('upload-btn');
-  btn.disabled = true;
-  btn.textContent = 'Extracting…';
+  const fromEmpty = document.body.dataset.state === 'empty';
+  if (fromEmpty) $('dropzone').classList.add('busy');
+  else $('strip-replace').textContent = 'extracting…';
   $('banner-slot').innerHTML = '';
   try {
     const form = new FormData();
@@ -440,51 +541,62 @@ async function handleUpload(file) {
     const res = await fetch('/intake/pdf', {method: 'POST', body: form});
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || `upload failed: HTTP ${res.status}`);
+    if (!fromEmpty && document.querySelectorAll('.doc').length && currentSource === 'corpus') {
+      corpusDocs = collectDocs();
+    }
     uploadedDocs = body.documents;
     uploadedFilename = body.filename || file.name;
     uploadedNotes = Object.fromEntries((body.notes || []).map(n => [n.doc_id, n.note]));
-    const toggle = $('source-toggle');
-    toggle.hidden = false;
-    toggle.querySelector('[data-source=upload]').textContent = `From upload: ${uploadedFilename}`;
-    if (currentSource === 'corpus') corpusDocs = collectDocs();
     currentSource = 'upload';
-    for (const b of toggle.querySelectorAll('button')) {
-      b.classList.toggle('active', b.dataset.source === 'upload');
-    }
     renderDocs(uploadedDocs, true);
+    setState('loaded');
+    updateStrip();
     resetResults();
+    $('chart-pane').scrollTop = 0;
   } catch (err) {
     showBanner(String(err.message || err));
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Upload PDF';
+    $('dropzone').classList.remove('busy');
+    $('strip-replace').textContent = 'replace (upload PDF)';
     $('pdf-input').value = '';
   }
 }
 
-$('upload-btn').onclick = () => $('pdf-input').click();
+// drop zone + strip wiring
+$('dropzone').onclick = (e) => { if (e.target.id !== 'load-sample') $('pdf-input').click(); };
+$('dropzone').ondragover = (e) => { e.preventDefault(); $('dropzone').classList.add('dragging'); };
+$('dropzone').ondragleave = () => $('dropzone').classList.remove('dragging');
+$('dropzone').ondrop = (e) => {
+  e.preventDefault();
+  $('dropzone').classList.remove('dragging');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) handleUpload(file);
+};
+$('load-sample').onclick = (e) => { e.preventDefault(); e.stopPropagation(); loadSample(); };
 $('pdf-input').onchange = () => {
   if ($('pdf-input').files[0]) handleUpload($('pdf-input').files[0]);
 };
-$('source-toggle').onclick = (e) => {
-  const b = e.target.closest('button[data-source]');
-  if (b) switchSource(b.dataset.source);
-};
+$('strip-replace').onclick = () => $('pdf-input').click();
+$('strip-switch').onclick = () => switchSource($('strip-switch').dataset.source);
+$('close-citation').onclick = closeCitation;
 
 function resetResults() {
   $('findings').innerHTML = '<div class="empty">Run the audit to stream findings here.</div>';
-  $('detail').innerHTML = '<div class="empty">Select a finding to see the regulation, the rationale, and the verified source span.</div>';
+  $('detail').innerHTML = '';
+  closeCitation();
   for (const k of ['pass','fail','unclear']) $('n-' + k).textContent = '0';
   $('elapsed').textContent = '0.0s';
-  selectedEl = null;
   lastRun = null;
-  $('download-report').disabled = true;
+  const dl = $('download-report');
+  dl.disabled = true;
+  dl.classList.remove('ready');
 }
 
 async function runAudit() {
   const btn = $('run');
   btn.disabled = true;
   resetResults();
+  document.body.classList.add('has-run');
   $('findings').innerHTML = '';
   const documents = collectDocs();
   lastRunDocs = Object.fromEntries(documents.map(d => [d.doc_id, d]));
@@ -532,7 +644,9 @@ async function runAudit() {
             counts: d.counts,
             elapsed_s: d.elapsed_s,
           };
-          $('download-report').disabled = false;
+          const dl = $('download-report');
+          dl.disabled = false;
+          dl.classList.add('ready');
           renderDisabledRows();
         }
       }
@@ -571,6 +685,7 @@ function upsertFinding(f) {
     lastRun = {rulebook_id: $('rulebook').value, documents: collectDocs(),
                findings: [], counts: {pass: 0, fail: 0, unclear: 0}, elapsed_s: 0};
   }
+  document.body.classList.add('has-run');
   const i = lastRun.findings.findIndex(x => x.rule_id === f.rule_id);
   if (i >= 0) lastRun.findings[i] = f; else lastRun.findings.push(f);
   const counts = {pass: 0, fail: 0, unclear: 0};
@@ -587,7 +702,9 @@ function upsertFinding(f) {
   }
   select(el);
   renderDetail(f);
-  $('download-report').disabled = false;
+  const dl = $('download-report');
+  dl.disabled = false;
+  dl.classList.add('ready');
 }
 
 function pseudoFinding(rule) {
@@ -612,6 +729,7 @@ function select(el) {
 }
 
 function renderDetail(f) {
+  openCitation();
   const rule = workingRules.find(r => r.rule_id === f.rule_id);
   const prov = rule ? clientProv(rule) : (f.provenance || 'committed');
   const isOff = disabledIds.has(f.rule_id);
@@ -630,7 +748,7 @@ function renderDetail(f) {
     <div class="verdict-line">
       <span class="verdict-word ${f.verdict}">${f.verdict}</span>
       ${badge}
-      <span class="conf">${f.mode === 'computed' ? 'deterministic — no model' : 'confidence: ' + esc(f.confidence)}</span>
+      <span class="conf-chip">${f.mode === 'computed' ? 'deterministic — no model' : esc(f.confidence) + ' confidence'}</span>
     </div>`;
   } else if (badge) {
     html += `<div class="verdict-line">${badge}</div>`;
@@ -638,6 +756,9 @@ function renderDetail(f) {
   html += `
     <div class="block-label">${regLabel}</div>
     <div class="reg-quote"${regStyle}><span class="rid-inline">${ridLine}</span>${esc(f.requirement_verbatim)}</div>`;
+  if (f.source_url && prov === 'committed') {
+    html += `<a class="ecfr" href="${esc(f.source_url)}" target="_blank" rel="noopener">view on eCFR →</a>`;
+  }
   if (hasVerdict) {
     html += `
     <div class="block-label">Finding</div>
@@ -657,9 +778,6 @@ function renderDetail(f) {
     html += `
       <div class="block-label">Verified span — ${esc(doc.doc_type)}</div>
       <div class="source-excerpt" id="excerpt">${body}</div>`;
-  }
-  if (f.source_url && prov === 'committed') {
-    html += `<a class="ecfr" href="${esc(f.source_url)}" target="_blank" rel="noopener">verify the source text yourself ↗</a>`;
   }
 
   if (rule) {
@@ -777,9 +895,10 @@ async function refineRule(rule) {
 }
 
 function showAuthoringCard() {
+  openCitation();
   if (selectedEl) { selectedEl.classList.remove('selected'); selectedEl = null; }
   $('detail').innerHTML = `
-    <div class="ctl-block" style="border-top:0;margin-top:0;padding-top:0">
+    <div class="ctl-block" style="margin-top:0">
       <div class="block-label" style="margin-top:0">New rule — write it in plain English</div>
       <textarea id="author-input" rows="3" placeholder="e.g. Every progress note must mention whether the patient is adhering to prescribed medications"></textarea>
       <div class="ctl-row"><button class="btn-sm primary" id="compile-btn" type="button">Compile</button></div>
@@ -810,14 +929,14 @@ async function compileNewRule() {
     $('compile-result').innerHTML = `
       <div class="verdict-line" style="margin-top:16px">
         <span class="prov-badge user">user rule</span>
-        <span class="conf">${esc(rule.rule_id)}</span>
+        <span class="conf-chip">${esc(rule.rule_id)}</span>
       </div>
       <div class="block-label">Requirement (as written)</div>
       <div class="reg-quote" style="font-style:normal;border-left-color:var(--ink-faint)">${esc(rule.requirement_verbatim)}</div>
       <div class="block-label">Evaluation criteria — edit before adding if you like</div>
       <textarea id="new-ev" rows="7">${esc(rule.evidence_required)}</textarea>
       <div class="block-label">Scope</div>
-      <div style="font-size:12px;color:var(--ink-soft)">All documents · evaluated semantically · held to the same
+      <div style="font-size:13px;color:var(--ink-soft)">All documents · evaluated semantically · held to the same
       verbatim-evidence verification as every committed rule</div>
       <div class="ctl-row"><button class="btn-sm primary" id="add-run-btn" type="button">Add &amp; run</button></div>`;
     $('add-run-btn').onclick = () => {

@@ -1,4 +1,4 @@
-"""Redline — audit a document set against a rulebook, streaming findings.
+"""Blueline — audit a document set against a rulebook, streaming findings.
 
 Endpoints:
     GET  /rulebooks            available rulebooks for the dropdown
@@ -31,7 +31,7 @@ from engine.schemas import DocumentIn, Finding, Rule, Rulebook  # noqa: E402
 
 ROOT = Path(__file__).parent
 
-app = FastAPI(title="Redline")
+app = FastAPI(title="Blueline")
 
 RULEBOOKS: dict[str, Rulebook] = {
     (rb := Rulebook.model_validate(json.loads(p.read_text()))).rulebook_id: rb
