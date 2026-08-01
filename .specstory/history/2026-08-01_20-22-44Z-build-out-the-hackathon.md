@@ -23662,3 +23662,50 @@ Both features are built, live-verified, and running at http://localhost:8000.
 - The HTML is standalone and print-ready: verified header pulls the audit's own counts/elapsed, verbatim §482.61 text appears for every flagged rule, sign-off lines close it, and it prints cleanly (rendered to a 13-page PDF via headless Chromium as a check).
 
 Also added: fixture generator at `scripts/make_fixture_pdfs.py` (HTML → PDF via the browse daemon, no new Python deps beyond `pypdf`/`python-multipart`). Still nothing committed to git across the whole project — happy to make commits if you want checkpoints before the demo.
+
+---
+
+_**User (2026-08-01 21:53:13Z)**_
+
+where can i find a sample of the pdf to upload?
+
+---
+
+_**Agent (claude-fable-5 2026-08-01 21:53:19Z)**_
+
+Both fixtures are in the `corpus/` folder of the repo:
+
+- `corpus/sample_export.pdf` — the main demo fixture (6-page "Lakeshore Behavioral Health" chart export; audits to 10 pass / 3 fail / 1 unclear)
+- `corpus/sample_export_broken.pdf` — the staged variant with the legal-status line removed (flips §482.61(a)(1) to amber)
+
+So: open http://localhost:8000, click **Upload PDF**, and pick `/Users/johnzhang/Documents/GitHub/document_verification/corpus/sample_export.pdf`. Extraction takes ~20–30 seconds, then the six documents appear in the left pane with "from PDF" chips and you can run the audit.
+
+If you want to regenerate them (or hand a judge a printed copy), the source is `scripts/make_fixture_pdfs.py` — it writes the HTML to `/tmp`, and the docstring has the two `browse` commands that convert them to PDF.
+
+---
+
+_**User (2026-08-01 22:01:55Z)**_
+
+One caveat first: GitHub is showing me the same single commit as before, so either the PDF intake work isn't pushed yet or I'm seeing a stale cache — I can't verify what landed. I'll answer on the assumption the intake + packet are in; if they're not, they still outrank everything below.
+
+Agreed that rule robustness is the right next target. Here's the specific shape, because "robust" hides three different features with very different payoff:
+
+**Add (compile from plain English) — the demo feature.** `POST /rules/compile`: judge's sentence in, one structured-output call through your existing `llm.py`, rule JSON out. The critical design choice: **compile and evaluate are separate steps.** The compiled rule renders as a card — requirement as given, the generated `evidence_required`, inferred scope — and the judge clicks "Add & run" to evaluate it. That beat where their sentence becomes a legible, checkable contract *before* it executes is the feature; skipping it turns "judges extend the system" ack box wrote a black box."
+
+**Edit — same machinery, cheaper than you think.** Click any rule card → its `evidence_required` in a textarea, plus a "refine in plain English" box that recompiles ("also accept family-reported strengths" → updated JSON, shown as a before/after). Re-run just that rule against the current chart, not the whole audit — you already evaluate per-rule, so this is a filter parameter, and it makes iteration feel instant. Edit is quietly the more impressive demo verb than add: a judge *tightening* a rule and watching a verdict flip from amber to fail demonstrates control in a way adding never does.
+
+**Delete/disable — build the toggle, skip delete.** A checkbox per rule that excludes it from the run. Two minutes of work, and it doubles as your safety valve: if any rule starts flapping during rehearsal, you disable it on the spot instead of editing JSON under pressure.
+
+**The robustness that actually matters is validation at the compile boundary, not CRUD polish.** Three failur catch:
+
+1. *Uncheckable rules.* A judge will type "the clinician must genuinely care about the patient." The compiler needs an explicit out: return `{"error": "not checkable against documentation", "reason": ...}` rather than generating a garbage rule. Handling a bad rule gracefully in front of judges is worth more than handling a good one — it shows the system knows its own boundaries.
+2. *Schema drift.* Validate compiler output against your Pydantic rule model server-side; reject and re-ask on failure rather than appending something malformed that breaks the audit loop mid-demo.
+3. *Provenance.* Authored/edited rules get a "user-defined" badge in the UI **and in the packet**, and an edited committed rule loses its verbatim-CFR styling. Your trust story is "verify the citation against federal law on your phone" — one judge-edited rule silently wearing CFR formatting undermines every real citation on the screen.
+
+Keep it all in-memory. Session-scoped rules that vanish on restart are fine and honest —stence is post-hackathon.
+
+**Order:** compile+add with the card step → disable toggle → provenance badges → edit → uncheckable-rule handling. About 45 minutes through edit. And the standing rule still applies: two full rehearsals of the complete sequence — PDF in, break the chart, author a rule, edit it, download the packet — outrank the last feature on this list. If rehearsal one surfaces anything flaky, the fix is the toggle, not more code.
+
+The demo arc this completes: break our chart, hand us your PDF, write us a rule, *change our rules*. Each step hands the judges more of the system. Nobody else in that room will end their three minutes with the judges having modified the auditor itself.
+
+What do you think directionally about this feature? First evaluate what would be effective here for ux and then we can plan the build
